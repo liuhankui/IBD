@@ -1,7 +1,6 @@
 # IBD analysis script 
 
-
-# IBD loci [pre-stpep 1, shell]
+## Pre-stpep 1: IBD loci [shell]
 ```
 zcat dbsnp_138.b37.vcf.gz|awk '!/#/{print $1"_"$2,$3,$4,$5}' | sort -k1,1 -T ./tmp > pos2allele.txt
 awk -F '\t' 'NR>1{print $1"_"$3,$2,$10,$11}' tableS2.txt|sort -k1,1 > ibd.pos
@@ -9,13 +8,13 @@ join ibd.pos pos2allele.txt|awk '{if($1!=s){print $1,$2,$6,$7,"D1="$3";D2="$4};s
 vep --assembly GRCh37 --fork 4 -i ibd.vcf -o ibd.vep --vcf --no_stats --merged --force_overwrite --offline --use_given_ref --per_gene --symbol --canonical --protein --biotype --nearest symbol --fasta hg19.masked.fa.gz --dir_cache ./cache
 ```
 
-# get gut scRNA data [pre-stpep 2, shell]
+## Pre-stpep 2: get gut scRNA data [shell]
 ```
 wget --no-check-certificate https://cellgeni.cog.sanger.ac.uk/gutcellatlas/Full_obj_raw_counts_nosoupx_v2.h5ad
 warning: 5.8G file size
 ```
 
-# get counts from h5 file format [pre-stpep 3, R]
+## Pre-stpep 3: get counts from h5 file format [R]
 ```
 library(rhdf5)
 library(Matrix)
@@ -58,12 +57,10 @@ for(k in marker){
 }
 ```
 
-# split data [pre-stpep 4, shell]
+## Pre-stpep 4: split data [shell]
 ```
 cat celltype.txt|'{print $2,$3 >> $4".celltype.txt"}'
 cat celltype.txt|cut -d ' ' -f 4|paste - counts.txt|awk -F '\t' '{print $2 >> $1".counts.txt"}'
-# subset Monocytes  [analysis step 1, R]
-
 
 for i in HF HP HA IBD
 do
@@ -76,7 +73,7 @@ done
 done > cell.counts.txt
 ```
 
-# generate cell-type exrpression specificty [pre-stpep 5, R]
+## Pre-stpep 5: calculate cell-type exrpression specificty [R]
 ```
 library(EWCE)
 library(ewceData)
@@ -98,7 +95,7 @@ ctd_file <- generate_celltype_data(
 )
 ```
 
-# required R packages
+## required R packages
 ```
 library(ggplot2)
 library(ggrepel)
@@ -122,7 +119,8 @@ library(intergraph)
 library(dendextend)
 library(polynom)
 ```
-# cell-type expression enrichment [analysis step 1, R]
+
+## cell-type expression enrichment
 
 ```
 source('./bin/bootstrap_enrichment_test.r')
@@ -150,7 +148,7 @@ write.table(rdf$results,file='enrichment.txt',sep='\t',quote=F,row.names=F,col.n
 
 
 
-# Fig. 1A [analysis step 2, R]
+## Fig. 1A
 ```
 df<-read.table('enrichment.txt',sep='\t',head=T)
 df$sign<-NA
@@ -179,7 +177,7 @@ ggplot(df,aes(celltype,-log10(p)))+
 ```
 
 
-# Fig. 1B [analysis step 2, R]
+## Fig. 1B
 ```
 df<-read.table('cell.counts.txt')
 Fig1B<-ggplot(df,aes(V1,V3/V4*100))+
@@ -197,7 +195,7 @@ Fig1B<-ggplot(df,aes(V1,V3/V4*100))+
         strip.text = element_text(size=12,colour="black"))
 ```
 
-# Fig. 1C [analysis step 3, R]
+## Fig. 1C
 ```
 df<-read.table('IBD.Monocytes.txt')
 df<-df[,colSums(df)>0]
@@ -236,7 +234,7 @@ ggplot(udf,aes(type,sd))+
               step_increase = 0)+coord_cartesian(ylim=c(0,1.5))
 ```
 
-# Fig. 1D [analysis step 4, R]
+## Fig. 1D
 ```
 pdf<-c(1)
 num_ibd<-length(IBD)
@@ -272,7 +270,7 @@ ggplot()+
 
 ```
 
-# Fig. 1E [analysis step 5, R]
+## Fig. 1E
 ```
 zdf<-read.table('gene.zscore',head=T)
 
@@ -293,7 +291,7 @@ ggplot(zdf,aes(x=lof_z,group = type))+
         strip.text = element_text(size=12,colour="black"))
 ```
 
-# Fig. 2 [analysis step 5, R]
+## Fig. 2
 ```
 gdf<-read.table('ibd.gene')
 gene<-read.table('gene.txt')
@@ -302,6 +300,7 @@ gene<-gene$V1
 #-----------network IBD----------------------
 df<-read.table('IBD.Monocytes.txt')
 names(df)<-gene
+df<-df[,gene %in% gdf$V1]
 df<-df[,colSums(df)>0]
 df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
 df<-log(df+1)
@@ -327,6 +326,7 @@ ndf1$source<-'Paediatric IBD'
 #-----------network HP----------------------
 df<-read.table('HP.Monocytes.txt')
 names(df)<-gene
+df<-df[,gene %in% gdf$V1]
 df<-df[,colSums(df)>0]
 df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
 df<-log(df+1)
@@ -352,6 +352,7 @@ ndf2$source<-'Paediatric Healthy'
 #-----------network HF----------------------
 df<-read.table('HF.Monocytes.txt')
 names(df)<-gene
+df<-df[,gene %in% gdf$V1]
 df<-df[,colSums(df)>0]
 df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
 df<-log(df+1)
@@ -378,6 +379,7 @@ ndf3$source<-'Fetal Healthy'
 #-----------network HA----------------------
 df<-read.table('HA.Monocytes.txt')
 names(df)<-gene
+df<-df[,gene %in% gdf$V1]
 df<-df[,colSums(df)>0]
 df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
 df<-log(df+1)
@@ -416,7 +418,7 @@ ggplot(ndf,aes(x = x, y = y, xend = xend, yend = yend)) +
 ```
 
 
-# Fig3. [analysis step 6, R]
+# Fig3
 ```
 cl<-function(g){
   A<-as.matrix(get.adjacency(g))
@@ -429,15 +431,13 @@ cl<-function(g){
   return(cc)
 }
 
-tmp1<-data.frame(V=length(V(gnet1)),E=length(E(gnet1)),D=graph.density(gnet1),T=transitivity(gnet1),C=cl(gnet1),S='PCD')
+tmp1<-data.frame(V=length(V(gnet1)),E=length(E(gnet1)),D=graph.density(gnet1),T=transitivity(gnet1),C=cl(gnet1),S='IBD')
 tmp2<-data.frame(V=length(V(gnet2)),E=length(E(gnet2)),D=graph.density(gnet2),T=transitivity(gnet2),C=cl(gnet2),S='PH')
 tmp3<-data.frame(V=length(V(gnet3)),E=length(E(gnet3)),D=graph.density(gnet3),T=transitivity(gnet3),C=cl(gnet3),S='FH')
 tmp4<-data.frame(V=length(V(gnet4)),E=length(E(gnet4)),D=graph.density(gnet4),T=transitivity(gnet4),C=cl(gnet4),S='AH')
 tdf<-rbind(tmp1,tmp2,tmp3,tmp4)
 tdf<-melt(tdf[,-4],id='S')
-tdf$S<-factor(tdf$S,levels=c('PCD','FH','PH','AH'),
-              labels=c('IBD','Fetal','Paediatric','Adult'),
-              order=T)
+
 tdf$variable<-factor(tdf$variable,
                      levels=c('V','E','D','C'),
                      labels=c('Nodes','Edges','Density','Cluster'))
@@ -480,9 +480,7 @@ wilcox.test(bdf$degree.x,bdf$degree.y,paired = T)$p.value
 
 
 ddf<-rbind(tmp1,tmp2,tmp3,tmp4)
-ddf$source<-factor(ddf$source,levels=c('PCD','FH','PH','AH'),
-                   labels=c('IBD','Fetal','Paediatric','Adult'),
-                   order=T)
+
 #fig3B
   ggplot()+
   geom_histogram(data=ddf,aes(degree,fill=source),binwidth = 1)+
@@ -513,7 +511,7 @@ ggplot(ddf,aes(degree,center))+
 dev.off()
 ```
 
-# Fig. 4 [analysis step 7, R]
+## Fig. 4
 ```
 kc1<-fastgreedy.community(gnet1)
 kc2<-fastgreedy.community(gnet2)
