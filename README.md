@@ -162,10 +162,6 @@ df$sign[df$FDR<0.05]<-'*'
 df$sign[df$FDR<0.01]<-'**'
 df$sign[df$FDR<0.005]<-'***'
 
-df<-df[order(df$p),]
-df<-df[order(df$V2),]
-df$celltype<-factor(df$celltype,levels=unique(df$celltype),order=T)
-
 ggplot(df,aes(celltype,-log10(p)))+
   geom_histogram(stat='identity')+
   geom_text(aes(label=sign),hjust=0,vjust=0.75,size=5)+
