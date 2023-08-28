@@ -67,20 +67,21 @@ cat celltype.txt|cut -f 4|paste - counts.txt|awk -F '\t' '{print $2 >> $1".count
 for i in HF HP HA IBD
 do
 cat $i.celltype.txt|paste - $i.counts.txt|awk -v i=$i -F '\t' '$2=="Monocytes"{print $3 >> i".Monocytes.txt"}'
+cat $i.Monocytes.txt|gzip -f > ./data/$i.Monocytes.txt.gz
 for j in Monocytes ILC3 Th1
 do
 echo -n "$i $j "
 cat $i.celltype.txt|awk -F '\t' -v c=$j -v a=0  -v b=0 '{if($2==c){a++};b++}END{print a,b}'
 done
-done > cell.counts.txt
+done > ./data/cell.counts.txt
 ```
 
 ## Pre-stpep 5: calculate cell-type exrpression specificty [R]
 ```
 library(EWCE)
 
-df<-read.table('IBD.counts.txt')
-cdf<-read.table('IBD.celltype.txt',sep='\t')
+df<-read.table('./IBD.counts.txt')
+cdf<-read.table('./IBD.celltype.txt',sep='\t')
 annotLevels <- list(level1class = cdf[,2], level2class =cdf[,1])
 df<-t(df[,-1])
 #names(df)<-paste0("I",seq(ncol(df)))
@@ -90,25 +91,21 @@ row.names(df)<-gdf[,1]
 ctd_file <- generate_celltype_data(
     exp=as.matrix(df),
     annotLevels=annotLevels,
-    groupName='IBD',savePath='./'
+    groupName='IBD',savePath='./data/'
 )
 ```
 
 ## required R packages
 ```
+library(RColorBrewer)
 library(ggplot2)
 library(ggrepel)
 library(ggpubr)
 library(plyr)
 library(reshape2)
-library(igraph)
-library(scales)
 library(Matrix)
 library(huge)
-library(RColorBrewer)
-library(tidyverse)
-library(dplyr)
-library(GGally)
+library(igraph)
 library(network)
 library(ggnetwork)
 library(geomtextpath)
@@ -126,7 +123,7 @@ source('./bin/generate_controlled_bootstrap_geneset.r')
 source('./bin/get_summed_proportions.r')
 load('./data/CellTypeData_IBD.rda')
 
-gdf<-read.table('data/ibd.gene')
+gdf<-read.table('./data/ibd.gene')
 x<-unique(gdf$V1)
 bg<-attr(ctd[[1]]$specificity,'dimnames')[[1]]
 hits<-x[x %in% bg]
@@ -141,8 +138,6 @@ rdf$results$celltype<-row.names(rdf$results)
 rdf$results$FDR<-p.adjust(rdf$results$p,method='fdr')
 write.table(rdf$results,file='enrichment.txt',sep='\t',quote=F,row.names=F,col.names=T)
 ```
-
-
 
 ## Fig. 1A
 ```
@@ -172,10 +167,9 @@ ggplot(df,aes(celltype,-log10(p)))+
         strip.text = element_text(size=12,colour="black"))
 ```
 
-
 ## Fig. 1B
 ```
-df<-read.table('cell.counts.txt')
+df<-read.table('./data/cell.counts.txt')
 ggplot(df,aes(V1,V3/V4*100))+
   geom_histogram(stat='identity',aes(fill=V2),colour='black',width=0.8,position='dodge')+
   scale_fill_brewer('',palette = 'Set2')+
@@ -193,11 +187,11 @@ ggplot(df,aes(V1,V3/V4*100))+
 
 ## Fig. 1C
 ```
-df<-read.table('IBD.Monocytes.txt')
+df<-read.table('./data/IBD.Monocytes.txt')
 ss<-colSums(df)>0
 df<-df[,ss]
 df<-log(df+1)
-sdf<-read.table('gene.txt')
+sdf<-read.table('./data/gene.txt')
 sdf<-sdf[ss,]
 sdf$sd<-apply(df,2,function(x){1/sd(x/mean(x))})
 
@@ -271,7 +265,7 @@ ggplot()+
 
 ## Fig. 1E
 ```
-zdf<-read.table('gene.zscore',head=T)
+zdf<-read.table('./data/gene.zscore',head=T)
 
 zdf<-merge(gdf,zdf[,c(1,4,6)],by='gene')
 
@@ -292,12 +286,12 @@ ggplot(zdf,aes(x=lof_z,group = type))+
 
 ## Fig. 2
 ```
-gdf<-read.table('ibd.gene')
-gene<-read.table('gene.txt')
+gdf<-read.table('./data/ibd.gene')
+gene<-read.table('./data/gene.txt')
 gene<-gene$V1
 
 #-----------network IBD----------------------
-df<-read.table('IBD.Monocytes.txt')
+df<-read.table(gzfile('./data/IBD.Monocytes.txt.gz'))
 names(df)<-gene
 df<-df[,gene %in% gdf$V1]
 df<-df[,colSums(df)>0]
@@ -323,7 +317,7 @@ ndf1<-ggnetwork(net)
 ndf1$source<-'Paediatric IBD'
 
 #-----------network HP----------------------
-df<-read.table('HP.Monocytes.txt')
+df<-read.table(gzfile('./data/HP.Monocytes.txt.gz'))
 names(df)<-gene
 df<-df[,gene %in% gdf$V1]
 df<-df[,colSums(df)>0]
@@ -349,7 +343,7 @@ ndf2<-ggnetwork(net)
 ndf2$source<-'Paediatric Healthy'
 
 #-----------network HF----------------------
-df<-read.table('HF.Monocytes.txt')
+df<-read.table(gzfile('./data/HF.Monocytes.txt.gz'))
 names(df)<-gene
 df<-df[,gene %in% gdf$V1]
 df<-df[,colSums(df)>0]
@@ -376,7 +370,7 @@ ndf3<-ggnetwork(net)
 ndf3$source<-'Fetal Healthy'
 
 #-----------network HA----------------------
-df<-read.table('HA.Monocytes.txt')
+df<-read.table(gzfile('./data/HA.Monocytes.txt.gz'))
 names(df)<-gene
 df<-df[,gene %in% gdf$V1]
 df<-df[,colSums(df)>0]
@@ -534,23 +528,3 @@ tanglegram(rank_branches(dnd2), rank_branches(dnd1), edge.lwd = 2,
            axes=F)
 ```
 
-
-
-```
-df<-read.table('IBD.counts.txt')
-cdf<-read.table('IBD.celltype.txt',sep='\t')
-names(cdf)[3]<-'CT'
-df<-cbind(cdf[,3,drop=F],df)
-df<-ddply(df,.(CT),function(x){colSums(x[-1])})
-annotLevels <- list(level1class = df[,1], level2class =df[,1])
-df<-t(df[,-1])
-names(df)<-paste0("I",seq(ncol(df)))
-gdf<-read.table('gene.txt')
-row.names(df)<-gdf[,1]
-
-ctd_file <- generate_celltype_data(
-    exp=as.matrix(df),
-    annotLevels=annotLevels,
-    groupName='IBD',savePath='./'
-)
-```
