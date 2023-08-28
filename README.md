@@ -1,7 +1,7 @@
 # IBD analysis script 
 
 ## 1. prepare IBD genes and gut scRNA data
-## Pre-stpep 1: IBD loci [shell]
+## Pre-step 1: IBD loci [shell]
 ```
 # Liu, J. Z. et al. Association analyses identify 38 susceptibility loci for inflammatory bowel disease and highlight shared genetic risk across populations. Nature genetics 47, 979–986 (2015)
 wget --no-check-certificate https://static-content.springer.com/esm/art%3A10.1038%2Fng.3359/MediaObjects/41588_2015_BFng3359_MOESM22_ESM.xlsx
@@ -12,14 +12,14 @@ join ibd.pos pos2allele.txt|awk '{if($1!=s){print $1,$2,$6,$7,"D1="$3";D2="$4};s
 vep --assembly GRCh37 --fork 4 -i ibd.vcf -o ibd.vep --vcf --no_stats --merged --force_overwrite --offline --use_given_ref --per_gene --symbol --canonical --protein --biotype --nearest symbol --fasta hg19.masked.fa.gz --dir_cache ./cache
 ```
 
-## Pre-stpep 2: get gut scRNA data [shell]
+## Pre-step 2: get gut scRNA data [shell]
 ```
 # Elmentaite, R. et al. Cells of the human intestinal tract mapped across space and time. Nature 597, 250–255 (2021)
 wget --no-check-certificate https://cellgeni.cog.sanger.ac.uk/gutcellatlas/Full_obj_raw_counts_nosoupx_v2.h5ad
 warning: 5.8G file size
 ```
 
-## Pre-stpep 3: get counts from h5 file format [R]
+## Pre-step 3: get counts from h5 file format [R]
 ```
 library(rhdf5)
 library(Matrix)
@@ -63,7 +63,7 @@ for(k in marker){
 }
 ```
 
-## Pre-stpep 4: split data [shell]
+## Pre-step 4: split data [shell]
 ```
 #rm -f *.celltype.txt *.counts.txt *.Monocytes.txt
 cat celltype.txt|awk -F '\t' '{print $2"\t"$3 >> $4".celltype.txt"}'
@@ -81,7 +81,7 @@ done
 done > ./data/cell.counts.txt
 ```
 
-## Pre-stpep 5: calculate cell-type exrpression specificty [R]
+## Pre-step 5: calculate cell-type exrpression specificty [R]
 ```
 library(EWCE)
 
@@ -100,13 +100,13 @@ ctd_file <- generate_celltype_data(
 )
 ```
 
-## Pre-stpep 6: get gene z-score from gnomAD [shell]
+## Pre-step 6: get gene z-score from gnomAD [shell]
 ```
 wget https://storage.googleapis.com/gcp-public-data--gnomad/release/2.1.1/constraint/gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz
 zcat gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz|cut -f '1,2,5,21,33,34' > ./data/gene.zscore
 ```
 
-## 2. IBD-analysis R script, you can start from here, step-by-step
+## 2. IBD code script, you can start from here, step-by-step [R]
 ```
 git clone https://github.com/liuhankui/IBD
 cd IBD
