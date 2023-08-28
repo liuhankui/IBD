@@ -96,14 +96,13 @@ ctd_file <- generate_celltype_data(
 )
 ```
 
-## IBD-analysis R script, you can start from here
+## IBD-analysis R script, you can start from here, step-by-step
 ```
 git clone https://github.com/liuhankui/IBD
 cd IBD
-Rscript script.r
+R
 ```
 
-## or run step-by-step:
 ## required R packages
 ```
 library(RColorBrewer)
