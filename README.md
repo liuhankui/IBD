@@ -514,18 +514,12 @@ ggplot(ddf,aes(degree,center))+
 ```
 dnd1<-fastgreedy.community(gnet1)
 dnd2<-fastgreedy.community(gnet2)
-dnd3<-fastgreedy.community(gnet3)
-dnd4<-fastgreedy.community(gnet4)
 
 dnd1 <- as.dendrogram(dnd1)
 dnd2 <- as.dendrogram(dnd2)
-dnd3 <- as.dendrogram(dnd3)
-dnd4 <- as.dendrogram(dnd4)
 
 dnd1 <- ladder(dnd1)
 dnd2 <- ladder(dnd2)
-dnd3 <- ladder(dnd3)
-dnd4 <- ladder(dnd4)
 
 dndlist <- dendextend::dendlist(dnd2, dnd1)
 dendextend::tanglegram(dndlist, fast = TRUE, margin_inner = 5)
