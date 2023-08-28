@@ -3,6 +3,9 @@
 ## 1. prepare IBD genes and gut scRNA data
 ## Pre-stpep 1: IBD loci [shell]
 ```
+# Liu, J. Z. et al. Association analyses identify 38 susceptibility loci for inflammatory bowel disease and highlight shared genetic risk across populations. Nature genetics 47, 979–986 (2015)
+wget --no-check-certificate https://static-content.springer.com/esm/art%3A10.1038%2Fng.3359/MediaObjects/41588_2015_BFng3359_MOESM22_ESM.xlsx
+# transform 41588_2015_BFng3359_MOESM22_ESM.xlsx to tableS2.txt by yourself
 zcat dbsnp_138.b37.vcf.gz|awk '!/#/{print $1"_"$2,$3,$4,$5}' | sort -k1,1 -T ./tmp > pos2allele.txt
 awk -F '\t' 'NR>1{print $1"_"$3,$2,$10,$11}' tableS2.txt|sort -k1,1 > ibd.pos
 join ibd.pos pos2allele.txt|awk '{if($1!=s){print $1,$2,$6,$7,"D1="$3";D2="$4};s=$1}'|tr '_' ' '|awk '{print $1,$2,$3,$4,$5,". .",$6}'|tr ' ' '\t'  > ibd.vcf
@@ -11,6 +14,7 @@ vep --assembly GRCh37 --fork 4 -i ibd.vcf -o ibd.vep --vcf --no_stats --merged -
 
 ## Pre-stpep 2: get gut scRNA data [shell]
 ```
+# Elmentaite, R. et al. Cells of the human intestinal tract mapped across space and time. Nature 597, 250–255 (2021)
 wget --no-check-certificate https://cellgeni.cog.sanger.ac.uk/gutcellatlas/Full_obj_raw_counts_nosoupx_v2.h5ad
 warning: 5.8G file size
 ```
