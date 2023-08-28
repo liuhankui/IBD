@@ -5,11 +5,20 @@
 ```
 # Liu, J. Z. et al. Association analyses identify 38 susceptibility loci for inflammatory bowel disease and highlight shared genetic risk across populations. Nature genetics 47, 979–986 (2015)
 wget --no-check-certificate https://static-content.springer.com/esm/art%3A10.1038%2Fng.3359/MediaObjects/41588_2015_BFng3359_MOESM22_ESM.xlsx
+
 # transform 41588_2015_BFng3359_MOESM22_ESM.xlsx to tableS2.txt by yourself
+
+wget --no-check-certificate https://data.broadinstitute.org/snowman/hg19/variant_calling/vqsr_resources/Exome/v2/dbsnp_138.b37.vcf.gz
+# warning: 1.8G file size
+
 zcat dbsnp_138.b37.vcf.gz|awk '!/#/{print $1"_"$2,$3,$4,$5}' | sort -k1,1 -T ./tmp > pos2allele.txt
 awk -F '\t' 'NR>1{print $1"_"$3,$2,$10,$11}' tableS2.txt|sort -k1,1 > ibd.pos
 join ibd.pos pos2allele.txt|awk '{if($1!=s){print $1,$2,$6,$7,"D1="$3";D2="$4};s=$1}'|tr '_' ' '|awk '{print $1,$2,$3,$4,$5,". .",$6}'|tr ' ' '\t'  > ibd.vcf
-vep --assembly GRCh37 --fork 4 -i ibd.vcf -o ibd.vep --vcf --no_stats --merged --force_overwrite --offline --use_given_ref --per_gene --symbol --canonical --protein --biotype --nearest symbol --fasta hg19.masked.fa.gz --dir_cache ./cache
+
+# VEP, https://github.com/Ensembl/ensembl-vep
+# warning: install vep and download cache
+
+vep --assembly GRCh37 --fork 4 -i ibd.vcf -o ibd.vep --vcf --no_stats --merged --force_overwrite --offline --use_given_ref --per_gene --symbol --canonical --protein --biotype --nearest symbol --fasta hg19.fa.gz --dir_cache ./cache
 ```
 
 ## Pre-step 2: get gut scRNA data [shell]
