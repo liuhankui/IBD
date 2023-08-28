@@ -114,6 +114,12 @@ library(dendextend)
 library(polynom)
 ```
 
+# IBD-analysis R script
+you can start from here
+```
+git clone https://github.com/liuhankui/IBD
+```
+
 ## cell-type expression enrichment
 
 ```
@@ -411,7 +417,7 @@ ggplot(ndf,aes(x = x, y = y, xend = xend, yend = yend)) +
 ```
 
 
-# Fig3
+# Fig3. A
 ```
 cl<-function(g){
   A<-as.matrix(get.adjacency(g))
@@ -435,7 +441,6 @@ tdf$variable<-factor(tdf$variable,
                      levels=c('V','E','D','C'),
                      labels=c('Nodes','Edges','Density','Cluster'))
 
-#fig3A
 ggplot()+
   geom_histogram(data=tdf,aes(S,value,fill=variable),stat='identity')+
   scale_fill_brewer(palette = "Set2")+
@@ -448,8 +453,10 @@ ggplot()+
         axis.text.x = element_text(angle=-30,hjust=0),
         axis.title = element_text(size=15,colour="black"),
         strip.text = element_text(size=12,colour="black"))
+```
 
-
+# Fig. 3B
+```
 tmp1<-data.frame(degree=igraph::degree(gnet1),center=betweenness(gnet1))
 tmp1$gene<-row.names(tmp1)
 tmp1$source<-'PCD'
@@ -471,10 +478,7 @@ bdf<-merge(tmp1[,c(1,3)],tmp4[,c(1,3)],by='gene')
 wilcox.test(adf$degree.x,adf$degree.y,paired = T)$p.value
 wilcox.test(bdf$degree.x,bdf$degree.y,paired = T)$p.value
 
-
 ddf<-rbind(tmp1,tmp2,tmp3,tmp4)
-
-#fig3B
   ggplot()+
   geom_histogram(data=ddf,aes(degree,fill=source),binwidth = 1)+
   scale_fill_brewer(palette = "Set2")+
@@ -486,10 +490,11 @@ ddf<-rbind(tmp1,tmp2,tmp3,tmp4)
         axis.text = element_text(size=12,colour="black"),
         axis.title = element_text(size=15,colour="black"),
         strip.text = element_text(size=12,colour="black"))
+```
 
-
+# Fig. 3C
+```
 ldf<-ddf[ddf$center>180 & ddf$degree>5,]
-#fig3C
 ggplot(ddf,aes(degree,center))+
   geom_point()+
   xlab('Degree')+ylab('Central score')+ggtitle('C')+
