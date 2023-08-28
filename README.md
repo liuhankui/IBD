@@ -1,6 +1,128 @@
 # IBD analysis script 
 
-# cell-type expression enrichment
+
+# IBD loci [pre-stpep 1, shell]
+```
+zcat dbsnp_138.b37.vcf.gz|awk '!/#/{print $1"_"$2,$3,$4,$5}' | sort -k1,1 -T ./tmp > pos2allele.txt
+awk -F '\t' 'NR>1{print $1"_"$3,$2,$10,$11}' tableS2.txt|sort -k1,1 > ibd.pos
+join ibd.pos pos2allele.txt|awk '{if($1!=s){print $1,$2,$6,$7,"D1="$3";D2="$4};s=$1}'|tr '_' ' '|awk '{print $1,$2,$3,$4,$5,". .",$6}'|tr ' ' '\t'  > ibd.vcf
+vep --assembly GRCh37 --fork 4 -i ibd.vcf -o ibd.vep --vcf --no_stats --merged --force_overwrite --offline --use_given_ref --per_gene --symbol --canonical --protein --biotype --nearest symbol --fasta hg19.masked.fa.gz --dir_cache ./cache
+```
+
+# get gut scRNA data [pre-stpep 2, shell]
+```
+wget --no-check-certificate https://cellgeni.cog.sanger.ac.uk/gutcellatlas/Full_obj_raw_counts_nosoupx_v2.h5ad
+warning: 5.8G file size
+```
+
+# get counts from h5 file format [pre-stpep 3, R]
+```
+library(rhdf5)
+library(Matrix)
+
+h5<-H5Fopen("Full_obj_raw_counts_nosoupx.h5ad")
+indptr<-h5$'X/indptr'
+gdf<-data.frame(
+     symbol=h5$'var/_index',
+     id=h5$'var/gene_ids'
+)
+cdf<-data.frame(
+      Diagnosis=as.character(factor(h5$'obs/Diagnosis',levels=0:(length(h5$'obs/__categories/Diagnosis')-1),labels=h5$'obs/__categories/Diagnosis'))
+      Category=as.character(factor(h5$'obs/category',levels=0:(length(h5$'obs/__categories/category')-1),labels=h5$'obs/__categories/category'))
+      Subtype=as.character(factor(h5$'obs/Integrated_05',levels=0:(length(h5$'obs/__categories/Integrated_05')-1),labels=h5$'obs/__categories/Integrated_05'))
+)
+cdf$sample<-as.character(factor(cdf$Diagnosis,levels=c('fetal','Healthy adult','Pediatric Crohn Disease','Pediatric healthy'),labels=c('HF','HA','IBD','HP')))
+h5closeAll()
+
+write.table(gdf,file='gene.txt',quote=F,row.names=F,col.names=F,sep=' ')
+write.table(cdf,file='celltype.txt',quote=F,row.names=F,col.names=F,sep=' ')
+
+# $ data   : num [1:760344941(1d)] 1 1 1 4 1 1 1 1 1 1 ...
+# $ indices: int [1:760344941(1d)] 15 53 102 154 216 223 244 269 271 326 ...
+# $ indptr : int [1:428470(1d)] 0 970 1672 2394 3141 4369 5545 6131 6906 7533 ...
+
+cells<-diff(indptr)
+marker<-seq(0,length(cells),by=1000)
+index<-1
+for(k in marker){
+  start<-k+1
+  end<-k+1000
+  if(end>length(cells)){end<-length(cells)}
+  rowN<-rep(1:(end-start+1),cells[start:end])
+  num<-length(rowN)
+  colN<-h5read("Full_obj_raw_counts_nosoupx.h5ad", "/X/indices", index=list(index:(index+num-1)))
+  counts<-h5read("Full_obj_raw_counts_nosoupx.h5ad", "/X/data", index=list(index:(index+num-1)))
+  index<-index+num
+  df<-as.matrix(sparseMatrix(i = rowN, j = colN + 1,x = as.numeric(counts),dims=c(end-start+1,33538)))
+  write.table(df,file="counts.txt",append=T,quote=F,row.names=F,col.names=F,sep=' ')
+}
+```
+
+# split data [pre-stpep 4, shell]
+```
+cat celltype.txt|'{print $2,$3 >> $4".celltype.txt"}'
+cat celltype.txt|cut -d ' ' -f 4|paste - counts.txt|awk -F '\t' '{print $2 >> $1".counts.txt"}'
+# subset Monocytes  [analysis step 1, R]
+
+
+for i in HF HP HA IBD
+do
+cat $i.celltype.txt|cut -d ' ' -f 3|paste - $i.counts.txt|awk -v i=$i -F '\t' '$1=="Monocytes"{print $2 >> i".Monocytes.txt"}'
+for j in Monocytes ILC3 Th1
+do
+echo -n "i j "
+cat $i.celltype.txt|awk -v c=$j '{if($3==c){a++};b++}END{print a,b}'
+done
+done > cell.counts.txt
+```
+
+# generate cell-type exrpression specificty [pre-stpep 5, R]
+```
+library(EWCE)
+library(ewceData)
+library(sctransform)
+
+df<-read.table('IBD.counts.txt')
+df<-t(df)
+names(df)<-paste0("I",seq(ncol(df)))
+gf<-read.table('gene.txt')
+row.names(df)<-gf[,1]
+
+af<-read.table('IBD.celltype.txt')
+annotLevels <- list(level1class = af[,2], level2class = af[,3])
+
+ctd_file <- generate_celltype_data(
+    exp=as.matrix(df),
+    annotLevels=annotLevels,
+    groupName='PCD',savePath='./'
+)
+```
+
+# required R packages
+```
+library(ggplot2)
+library(ggrepel)
+library(ggpubr)
+library(ggsignif)
+library(plyr)
+library(reshape2)
+library(grid)
+library(igraph)
+library(scales)
+library(Matrix)
+library(huge)
+library(RColorBrewer)
+library(tidyverse)
+library(dplyr)
+library(GGally)
+library(network)
+library(ggnetwork)
+library(geomtextpath)
+library(intergraph)
+library(dendextend)
+library(polynom)
+```
+# cell-type expression enrichment [analysis step 1, R]
 
 ```
 source('./bin/bootstrap_enrichment_test.r')
@@ -26,36 +148,9 @@ rdf$results$FDR<-p.adjust(rdf$results$p,method='fdr')
 write.table(rdf$results,file='enrichment.txt',sep='\t',quote=F,row.names=F,col.names=T)
 ```
 
-# required R packages
-```
-library(ggplot2)
-library(ggrepel)
-library(ggpubr)
-library(ggsignif)
-library(plyr)
-library(reshape2)
-library(figpatch)
-library(grid)
-library(igraph)
-library(scales)
-library(Matrix)
-library(huge)
-library(RColorBrewer)
-library(sf)
-library(tidyverse)
-library(dplyr)
-library(AID)
-library(lemon)
-library(GGally)
-library(network)
-library(ggnetwork)
-library(geomtextpath)
-library(intergraph)
-library(dendextend)
-library(polynom)
-```
 
-# Fig1A
+
+# Fig. 1A [analysis step 2, R]
 ```
 df<-read.table('enrichment.txt',sep='\t',head=T)
 df$sign<-NA
@@ -83,21 +178,8 @@ ggplot(df,aes(celltype,-log10(p)))+
         strip.text = element_text(size=12,colour="black"))
 ```
 
-# subset Monocytes
 
-```
-for i in HF HP HA IBD
-do
-cat $i.celltype.txt|cut -d ' ' -f 3|paste - $i.counts.txt|awk -v i=$i -F '\t' '$1=="Monocytes"{print $2 >> i".Monocytes.txt"}'
-for j in Monocytes ILC3 Th1
-do
-echo -n "i j "
-cat $i.celltype.txt|awk -v c=$j '{if($3==c){a++};b++}END{print a,b}'
-done
-done > cell.counts.txt
-```
-
-# Fig 1B
+# Fig. 1B [analysis step 2, R]
 ```
 df<-read.table('cell.counts.txt')
 Fig1B<-ggplot(df,aes(V1,V3/V4*100))+
@@ -115,7 +197,7 @@ Fig1B<-ggplot(df,aes(V1,V3/V4*100))+
         strip.text = element_text(size=12,colour="black"))
 ```
 
-# Fig1C
+# Fig. 1C [analysis step 3, R]
 ```
 df<-read.table('IBD.Monocytes.txt')
 df<-df[,colSums(df)>0]
@@ -154,7 +236,7 @@ ggplot(udf,aes(type,sd))+
               step_increase = 0)+coord_cartesian(ylim=c(0,1.5))
 ```
 
-# Fig1D
+# Fig. 1D [analysis step 4, R]
 ```
 pdf<-c(1)
 num_ibd<-length(IBD)
@@ -190,7 +272,7 @@ ggplot()+
 
 ```
 
-# Fig1E
+# Fig. 1E [analysis step 5, R]
 ```
 zdf<-read.table('gene.zscore',head=T)
 
@@ -211,7 +293,7 @@ ggplot(zdf,aes(x=lof_z,group = type))+
         strip.text = element_text(size=12,colour="black"))
 ```
 
-#Fig2
+# Fig. 2 [analysis step 5, R]
 ```
 gdf<-read.table('ibd.gene')
 gene<-read.table('gene.txt')
@@ -332,32 +414,9 @@ ggplot(ndf,aes(x = x, y = y, xend = xend, yend = yend)) +
   facet_wrap(~source,scale='free')+
   theme_blank()
 ```
-# Fig4
-```
-kc1<-fastgreedy.community(gnet1)
-kc2<-fastgreedy.community(gnet2)
-kc3<-fastgreedy.community(gnet3)
-kc4<-fastgreedy.community(gnet4)
 
-dnd1 <- as.dendrogram(kc1)
-dnd2 <- as.dendrogram(kc2)
-dnd3 <- as.dendrogram(kc3)
-dnd4 <- as.dendrogram(kc4)
-dnd1 <- ladder(dnd1)
-dnd2 <- ladder(dnd2)
-dnd3 <- ladder(dnd3)
-dnd4 <- ladder(dnd4)
 
-## plot the tanglegram
-dndlist <- dendextend::dendlist(dnd2, dnd1)
-dendextend::tanglegram(dndlist, fast = TRUE, margin_inner = 5)
-
-tanglegram(rank_branches(dnd2), rank_branches(dnd1), edge.lwd = 2,
-           margin_inner = 5, type = "t", center = TRUE,
-           axes=F)
-```
-
-# Fig3
+# Fig3. [analysis step 6, R]
 ```
 cl<-function(g){
   A<-as.matrix(get.adjacency(g))
@@ -454,94 +513,29 @@ ggplot(ddf,aes(degree,center))+
 dev.off()
 ```
 
-# IBD loci
+# Fig. 4 [analysis step 7, R]
 ```
-zcat dbsnp_138.b37.vcf.gz|awk '!/#/{print $1"_"$2,$3,$4,$5}' | sort -k1,1 -T ./tmp > pos2allele.txt
-awk -F '\t' 'NR>1{print $1"_"$3,$2,$10,$11}' tableS2.txt|sort -k1,1 > ibd.pos
-join ibd.pos pos2allele.txt|awk '{if($1!=s){print $1,$2,$6,$7,"D1="$3";D2="$4};s=$1}'|tr '_' ' '|awk '{print $1,$2,$3,$4,$5,". .",$6}'|tr ' ' '\t'  > ibd.vcf
-vep --assembly GRCh37 --fork 4 -i ibd.vcf -o ibd.vep --vcf --no_stats --merged --force_overwrite --offline --use_given_ref --per_gene --symbol --canonical --protein --biotype --nearest symbol --fasta hg19.masked.fa.gz --dir_cache ./cache
+kc1<-fastgreedy.community(gnet1)
+kc2<-fastgreedy.community(gnet2)
+kc3<-fastgreedy.community(gnet3)
+kc4<-fastgreedy.community(gnet4)
+
+dnd1 <- as.dendrogram(kc1)
+dnd2 <- as.dendrogram(kc2)
+dnd3 <- as.dendrogram(kc3)
+dnd4 <- as.dendrogram(kc4)
+dnd1 <- ladder(dnd1)
+dnd2 <- ladder(dnd2)
+dnd3 <- ladder(dnd3)
+dnd4 <- ladder(dnd4)
+
+dndlist <- dendextend::dendlist(dnd2, dnd1)
+dendextend::tanglegram(dndlist, fast = TRUE, margin_inner = 5)
+
+tanglegram(rank_branches(dnd2), rank_branches(dnd1), edge.lwd = 2,
+           margin_inner = 5, type = "t", center = TRUE,
+           axes=F)
 ```
-
-# get gut scRNA data
-```
-wget --no-check-certificate https://cellgeni.cog.sanger.ac.uk/gutcellatlas/Full_obj_raw_counts_nosoupx_v2.h5ad
-warning: 5.8G file size
-```
-
-# get counts from h5 file format
-```
-library(rhdf5)
-library(Matrix)
-
-h5<-H5Fopen("Full_obj_raw_counts_nosoupx.h5ad")
-indptr<-h5$'X/indptr'
-gdf<-data.frame(
-     symbol=h5$'var/_index',
-     id=h5$'var/gene_ids'
-)
-cdf<-data.frame(
-      Diagnosis=as.character(factor(h5$'obs/Diagnosis',levels=0:(length(h5$'obs/__categories/Diagnosis')-1),labels=h5$'obs/__categories/Diagnosis'))
-      Category=as.character(factor(h5$'obs/category',levels=0:(length(h5$'obs/__categories/category')-1),labels=h5$'obs/__categories/category'))
-      Subtype=as.character(factor(h5$'obs/Integrated_05',levels=0:(length(h5$'obs/__categories/Integrated_05')-1),labels=h5$'obs/__categories/Integrated_05'))
-)
-cdf$sample<-as.character(factor(cdf$Diagnosis,levels=c('fetal','Healthy adult','Pediatric Crohn Disease','Pediatric healthy'),labels=c('HF','HA','IBD','HP')))
-h5closeAll()
-
-write.table(gdf,file='gene.txt',quote=F,row.names=F,col.names=F,sep=' ')
-write.table(cdf,file='celltype.txt',quote=F,row.names=F,col.names=F,sep=' ')
-
-# $ data   : num [1:760344941(1d)] 1 1 1 4 1 1 1 1 1 1 ...
-# $ indices: int [1:760344941(1d)] 15 53 102 154 216 223 244 269 271 326 ...
-# $ indptr : int [1:428470(1d)] 0 970 1672 2394 3141 4369 5545 6131 6906 7533 ...
-
-cells<-diff(indptr)
-marker<-seq(0,length(cells),by=1000)
-index<-1
-for(k in marker){
-  start<-k+1
-  end<-k+1000
-  if(end>length(cells)){end<-length(cells)}
-  rowN<-rep(1:(end-start+1),cells[start:end])
-  num<-length(rowN)
-  colN<-h5read("Full_obj_raw_counts_nosoupx.h5ad", "/X/indices", index=list(index:(index+num-1)))
-  counts<-h5read("Full_obj_raw_counts_nosoupx.h5ad", "/X/data", index=list(index:(index+num-1)))
-  index<-index+num
-  df<-as.matrix(sparseMatrix(i = rowN, j = colN + 1,x = as.numeric(counts),dims=c(end-start+1,33538)))
-  write.table(df,file="counts.txt",append=T,quote=F,row.names=F,col.names=F,sep=' ')
-}
-```
-
-# subset data
-```
-cat celltype.txt|'{print $2,$3 >> $4".celltype.txt"}'
-cat celltype.txt|cut -d ' ' -f 4|paste - counts.txt|awk -F '\t' '{print $2 >> $1".counts.txt"}'
-```
-
-# generate rda
-```
-library(EWCE)
-library(ewceData)
-library(sctransform)
-
-df<-read.table('IBD.counts.txt')
-df<-t(df)
-names(df)<-paste0("I",seq(ncol(df)))
-gf<-read.table('gene.txt')
-row.names(df)<-gf[,1]
-
-af<-read.table('IBD.celltype.txt')
-annotLevels <- list(level1class = af[,2], level2class = af[,3])
-
-ctd_file <- generate_celltype_data(
-    exp=as.matrix(df),
-    annotLevels=annotLevels,
-    groupName='PCD',savePath='./'
-)
-```
-
-
-
-
 
 
 
