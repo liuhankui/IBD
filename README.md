@@ -425,7 +425,7 @@ ggplot(ndf,aes(x = x, y = y, xend = xend, yend = yend)) +
 ```
 
 
-# Fig3. A
+## Fig3. A
 ```
 cl<-function(g){
   A<-as.matrix(get.adjacency(g))
@@ -463,7 +463,7 @@ ggplot()+
         strip.text = element_text(size=12,colour="black"))
 ```
 
-# Fig. 3B
+## Fig. 3B
 ```
 tmp1<-data.frame(degree=igraph::degree(gnet1),center=betweenness(gnet1))
 tmp1$gene<-row.names(tmp1)
@@ -500,7 +500,7 @@ ddf<-rbind(tmp1,tmp2,tmp3,tmp4)
         strip.text = element_text(size=12,colour="black"))
 ```
 
-# Fig. 3C
+## Fig. 3C
 ```
 ldf<-ddf[ddf$center>180 & ddf$degree>5,]
 ggplot(ddf,aes(degree,center))+
