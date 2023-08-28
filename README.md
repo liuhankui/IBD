@@ -26,15 +26,15 @@ gdf<-data.frame(
      id=h5$'var/gene_ids'
 )
 cdf<-data.frame(
-      Diagnosis=as.character(factor(h5$'obs/Diagnosis',levels=0:(length(h5$'obs/__categories/Diagnosis')-1),labels=h5$'obs/__categories/Diagnosis'))
-      Category=as.character(factor(h5$'obs/category',levels=0:(length(h5$'obs/__categories/category')-1),labels=h5$'obs/__categories/category'))
+      Diagnosis=as.character(factor(h5$'obs/Diagnosis',levels=0:(length(h5$'obs/__categories/Diagnosis')-1),labels=h5$'obs/__categories/Diagnosis')),
+      Category=as.character(factor(h5$'obs/category',levels=0:(length(h5$'obs/__categories/category')-1),labels=h5$'obs/__categories/category')),
       Subtype=as.character(factor(h5$'obs/Integrated_05',levels=0:(length(h5$'obs/__categories/Integrated_05')-1),labels=h5$'obs/__categories/Integrated_05'))
 )
 cdf$sample<-as.character(factor(cdf$Diagnosis,levels=c('fetal','Healthy adult','Pediatric Crohn Disease','Pediatric healthy'),labels=c('HF','HA','IBD','HP')))
 h5closeAll()
 
-write.table(gdf,file='gene.txt',quote=F,row.names=F,col.names=F,sep=' ')
-write.table(cdf,file='celltype.txt',quote=F,row.names=F,col.names=F,sep=' ')
+write.table(gdf,file='gene.txt',quote=F,row.names=F,col.names=F,sep='\t')
+write.table(cdf,file='celltype.txt',quote=F,row.names=F,col.names=F,sep='\t')
 
 # $ data   : num [1:760344941(1d)] 1 1 1 4 1 1 1 1 1 1 ...
 # $ indices: int [1:760344941(1d)] 15 53 102 154 216 223 244 269 271 326 ...
@@ -59,16 +59,17 @@ for(k in marker){
 
 ## Pre-stpep 4: split data [shell]
 ```
-cat celltype.txt|'{print $2,$3 >> $4".celltype.txt"}'
-cat celltype.txt|cut -d ' ' -f 4|paste - counts.txt|awk -F '\t' '{print $2 >> $1".counts.txt"}'
+#rm -f *.celltype.txt *.counts.txt
+cat celltype.txt|awk -F '\t' '{print $2,$3 >> $4".celltype.txt"}'
+cat celltype.txt|cut -f 4|paste - counts.txt|awk -F '\t' '{print $2 >> $1".counts.txt"}'
 
 for i in HF HP HA IBD
 do
-cat $i.celltype.txt|cut -d ' ' -f 3|paste - $i.counts.txt|awk -v i=$i -F '\t' '$1=="Monocytes"{print $2 >> i".Monocytes.txt"}'
+cat $i.celltype.txt|cut -f 3|paste - $i.counts.txt|awk -v i=$i -F '\t' '$1=="Monocytes"{print $2 >> i".Monocytes.txt"}'
 for j in Monocytes ILC3 Th1
 do
 echo -n "i j "
-cat $i.celltype.txt|awk -v c=$j '{if($3==c){a++};b++}END{print a,b}'
+cat $i.celltype.txt|awk -F '\t' -v c=$j '{if($3==c){a++};b++}END{print a,b}'
 done
 done > cell.counts.txt
 ```
@@ -82,16 +83,16 @@ library(sctransform)
 df<-read.table('IBD.counts.txt')
 df<-t(df)
 names(df)<-paste0("I",seq(ncol(df)))
-gf<-read.table('gene.txt')
-row.names(df)<-gf[,1]
+gdf<-read.table('gene.txt')
+row.names(df)<-gdf[,1]
 
-af<-read.table('IBD.celltype.txt')
-annotLevels <- list(level1class = af[,2], level2class = af[,3])
+cdf<-read.table('IBD.celltype.txt',sep='\t')
+annotLevels <- list(level1class = cdf[,2], level2class =cdf[,3])
 
 ctd_file <- generate_celltype_data(
     exp=as.matrix(df),
     annotLevels=annotLevels,
-    groupName='PCD',savePath='./'
+    groupName='IBD',savePath='./'
 )
 ```
 
@@ -100,7 +101,6 @@ ctd_file <- generate_celltype_data(
 library(ggplot2)
 library(ggrepel)
 library(ggpubr)
-library(ggsignif)
 library(plyr)
 library(reshape2)
 library(grid)
@@ -205,8 +205,8 @@ sdf$sd<-sd=apply(df,2,function(x){1/sd(x/mean(x))})
 
 IBD<-read.table('ibd.gene')
 IBD<-unique(IBD$V1)
-HI<-c('ANK2','APC','BCL11B','CD2AP','COMT','CSF2RA','DMPK','DYRK1A','EGR1','EHMT1','FGF10','FOXP1','FOXP2','GCH1','GHRL','GTF2I','HOXD13','IGF1','KCNQ2','LMX1B','MAPT','MC4R','NF1','NKX2-5','NLGN4X','NLRP3','NPAS3','NSD1','PARK2','PAX6','PIK3R1','PRODH','PTEN','RELN','SATB2','SCN1A','SEMA5A','SHFM1','SHMT1','SNCA','SPR','ST7','TBX1','TCF4','TGFB1','TPM1','TSC1','TSC2','WWOX')
-LOFT<-c('A2M','ABCA10','ABCA8','ABCC11','ABCC12','ABHD12B','ABHD14B','ACSBG2','ACSM2A','ACSM2B','ACSM3','ADAM2','ADPRHL1','ADSSL1','AHNAK2','AKAP3','ALDH1B1','ANKRD30A','ANKRD35','ANO5','AP1G2','APIP','APOBEC3A','APOBEC3B','ASB15','ASPSCR1','ATP10B','ATP11A','ATP12A','ATP2C2','BPHL','BPIFA3','BTN3A3','BTNL2','BTNL8','BTNL9','C10orf53','C11orf40','C1orf127','C2orf40','C3orf14','C4orf46','C4orf50','C6','CABYR','CAPN9','CARD6','CCDC121','CCDC13','CCDC60','CCDC66','CD180','CD36','CD96','CDH19','CDK11A','CDKL2','CELA1','CEP72','CES1','CES5A','CFHR1','CFHR2','CFHR3','CHD1L','CHIT1','CHPF2','CLCN1','CLYBL','CNKSR1','COL16A1','COL6A2','COL6A5','CPXM2','CROT','CRYGN','CRYZ','CSH1','CTSE','CYP2A6','CYP2C8','CYP2D6','CYP2F1','CYP3A5','CYP4B1','DCDC2B','DCHS2','DDX60','DEFB126','DHDH','DMBT1','DNAH7','DQX1','DUOX2','ECT2L','EFCAB13','EFCAB3','EFCAB5','EFCAB6','ENOSF1','ENPEP','EPPK1','EPX','ERAP1','ERV3-1','EXO5','FAM129C','FAM151A','FAM187B','FAM45A','FAM81B','FCGBP','FCGR2A','FCN3','FLG','FLG2','FMO2','FRG2B','FUT2','FUT6','GADL1','GBGT1','GBP3','GBP4','GCFC2','GH2','GJB4','GLB1L2','GMPR','GOLGA8S','GP6','GPATCH2L','GRIN3B','GRK7','GYPB','HELB','HK3','HLA-B','HLA-DPA1','HPSE','HRG','HRNR','IDI2','IFIH1','IFNK','IL17RC','IL3RA','IQCH','ITIH1','KIAA0753','KIAA1257','KIAA1586','KIR3DL1','KLK14','KLK3','KRT4','KRT77','KRT83','LMF2','LMO7','LPA','LRRC39','LRTM1','MANEA','MAP3K4','MAZ','MCF2L','MCOLN3','MFSD9','MGAM','MLANA','MMP10','MOGAT1','MOK','MOXD1','MS4A6A','MST1','MUC17','MUC6','MUTYH','MYBBP1A','MYH1','MYH13','MYH8','MYO1A','MYOC','MYOF','NAALAD2','NBPF14','NBPF15','NEIL1','NLRP13','NLRP9','NOP16','NUDT8','OARD1','OBSCN','OCEL1','OR8S1','PAPLN','PDE11A','PDIA2','PGPEP1L','PHRF1','PKD1L2','PKHD1L1','PLA2G2C','PLA2G4D','PLA2R1','PLEKHG7','PLIN4','PNLIPRP3','POLM','POTEH','PPEF2','PPL','PPP1R3A','PRAMEF2','PRB1','PRB2','PRB4','PSG1','PSG11','PSG4','PSG9','PTCHD3','PTGDR','PXDNL','PZP','RAI1','RERGL','RETSAT','RFPL1','RGPD4','RGS11','RHD','RNF32','ROPN1B','RP1L1','RPTN','RTKN2','RTP1','SAMD11','SEMG2','SERHL2','SERPINA10','SERPINA9','SERPINB3','SFI1','SIGLEC1','SIGLEC5','SLC17A9','SLC22A10','SLC22A14','SLC22A25','SLC26A10','SLC5A4','SLCO1B1','SLFN13','SPATA31A6','SPATA4','SPATC1','SPNS3','SULT1A2','SULT1C4','SYNM','SYTL2','TAF6','TCF3','TCHHL1','TEKT3','TGM4','THBS4','THEM5','TIGD6','TLR10','TLR5','TMC2','TMEM82','TMIE','TMPRSS7','TNN','TRIM22','TRIM45','TRIM48','TRIM59','TRMT10B','TRMT2A','TTC38','TTN','UGT2B10','UGT2B17','UGT2B28','UMODL1','UNC93A','UPB1','UPK3A','UPP2','USP45','USP6','VILL','VWA3B','VWA7','WDR27','WDR90','XIRP1','XRRA1','ZAN','ZNF223','ZNF229','ZNF257','ZNF30','ZNF343','ZNF396','ZNF417','ZNF486','ZNF528','ZNF544','ZNF587','ZNF599','ZNF611','ZNF790','ZNF83','ZNF831','ZNF844','ZNF846','ZNF860','ZNF878','ZNF92','ZRANB3')
+HI<-c('TP73','DFFB','KCNAB2','CHD5','CAMTA1','PINK1','SAM68','KCNQ4','GLUT1','MYH','FOXE3','HUD','INK4C','NFIA','CCN1','ABCA4','WNT2B','ADAR','ATP1A2','MPZ','MYOC','HRPT2','LRH-1','IRF6','PROX1','TP53BP2','NLRP3','ID2','MYCN','GCKR','SPAST','MSH6','FSHR','SPR','PAX8','SMADIP1','RPRM','SCN1A','HOXD13','COL3A1','SLC40A1','SATB2','SUMO1','BMPR2','XRCC5','PAX3','STK25','CHL1','SRGAP3','VHL','GHRL','PPARG','SRG3','RASSF1A','TKT','MITF','FOXP1','ROBO1','DIRC2','ATP2C1','FOXL2','ATR','SI','TERC','SOX2','OPA1','TFRC','FGFR3','LETM1','SH3BP2','MSX1','RBPJ','PHOX2B','ENAM','MAPK10','PKD2','SNCA','RIEG','ANK2','MAD2L1','PLK4','FBXW7','TERT','SEMA5A','GDNF','FGF10','PIK3R1','APC','RAD50','SMAD5','EGR1','TCOF1','NPM1','NKX2-5','MSX2','NSD1','FOXC1','DSP','EEF1E1','TNXA','TNX','HMGA1','RUNX2','CD2AP','ELOVL4','NT5E','SIM1','COL10A1','PARK2','TWIST1','GLI3','GCK','FKBP6','ELN','LIMK1','RFC2','GTF3','GTF2I','NCF1','KRIT1','COL1A2','SHFM1','RELN','FOXP2','CAV1','ST7','BRAF','SHH','HLXB9','GATA4','NKX3-1','FGFR1','CHD7','CSN5','EYA1','TRPS1','DMRT1','DMRT2','MLLT3','ARF','CDKN2B','BAG1','PAX5','GCNT1','ROR2','PTCH1','NR5A1','LMX1B','ENG','TSC1','COL5A1','NOTCH1','EHMT1','KLF6','GATA3','ANX7','PTEN','PAX2','FGF8','BUB3','CDKN1C','NUP98','PAX6','WT1','EXT2','ALX4','FEN1','SF1','FGF3','FZD4','ATM','H2AX','FLI1','NFRKB','PHB2','ETV6','CDKN1B','COL2A1','KRT5','MYF6','IGF1','SERCA2','TBX5','TBX3','HNF1A','BRCA2','FKHR','RB1','ZIC2','LIG4','COCH','NPAS3','NKX2-1','PAX9','BMP4','GCH1','SIX6','RAD51B','BCL11B','SPRED1','BUBR1','DLL4','FBN1','ALDH1A2','TPM1','P450SCC','BLM','COUP-TFII','SOX8','TSC2','PKD1','CBP','SOCS1','PRM2','PRM1','ABCC6','ERAF','SALL1','CBFB','CTCF','WWOX','FOXF1','FOXC2','YWHAE','HIC1','LIS1','P53','PMP22','COPS3','RAI1','TOP3A','SHMT1','RNF135','NF1','SUZ12','MEL-18','KLHL10','STAT5B','STAT5A','BECN1','BRCA1','PGRN','MAPT','CSH1','POLG2','PRKAR1A','SOX9','NHERF1','FSCN2','DSG1','DSG2','TCF4','FECH','MC4R','GALR1','SALL3','LKB1','PNPLA6','RYR1','TGFB1','RPS19','DMPK','CRX','PRPF31','JAG1','PAX1','GDF5','HNF4A','SALL4','MC3R','RAE1','GNAS','EDN3','KCNQ2','SOX18','SLC5A3','RUNX1','DYRK1A','COL6A1','PRODH','DGCR2','HIRA','TBX1','COMT','RTN4R','PCQAP','LZTR1','INI1','MYH9','SOX10','FBLN1','PPARA','PROSAP2','SHOX','P2RY8','NLGN4X','TRAPPC2','RPS4X','CSF2RA')
+LOFT<-c('ALDH1B1','ANKRD30A','ANKRD35','ANO5','AP1G2','APIP','APOBEC3A','APOBEC3B','ASB15','ASPSCR1','ATP10B','ATP11A','ATP12A','ATP2C2','BPHL','BPIFA3','BTN3A3','BTNL2','BTNL8','BTNL9','C10orf53','C11orf40','C1orf127','C2orf40','C3orf14','C4orf46','C4orf50','C6','CABYR','CAPN9','CARD6','CCDC121','CCDC13','CCDC60','CCDC66','CD180','CD36','CD96','CDH19','CDK11A','CDKL2','CELA1','CEP72','CES1','CES5A','CFHR1','CFHR2','CFHR3','CHD1L','CHIT1','CHPF2','CLCN1','CLYBL','CNKSR1','COL16A1','COL6A2','COL6A5','CPXM2','CROT','CRYGN','CRYZ','CSH1','CTSE','CYP2A6','CYP2C8','CYP2D6','CYP2F1','CYP3A5','CYP4B1','DCDC2B','DCHS2','DDX60','DEFB126','DHDH','DMBT1','DNAH7','DQX1','DUOX2','ECT2L','EFCAB13','EFCAB3','EFCAB5','EFCAB6','ENOSF1','ENPEP','EPPK1','EPX','ERAP1','ERV3-1','EXO5','FAM129C','FAM151A','FAM187B','FAM45A','FAM81B','FCGBP','FCGR2A','FCN3','FLG','FLG2','FMO2','FRG2B','FUT2','FUT6','GADL1','GBGT1','GBP3','GBP4','GCFC2','GH2','GJB4','GLB1L2','GMPR','GOLGA8S','GP6','GPATCH2L','GRIN3B','GRK7','GYPB','HELB','HK3','HLA-B','HLA-DPA1','HPSE','HRG','HRNR','IDI2','IFIH1','IFNK','IL17RC','IL3RA','IQCH','ITIH1','KIAA0753','KIAA1257','KIAA1586','KIR3DL1','KLK14','KLK3','KRT4','KRT77','KRT83','LMF2','LMO7','LPA','LRRC39','LRTM1','MANEA','MAP3K4','MAZ','MCF2L','MCOLN3','MFSD9','MGAM','MLANA','MMP10','MOGAT1','MOK','MOXD1','MS4A6A','MST1','MUC17','MUC6','MUTYH','MYBBP1A','MYH1','MYH13','MYH8','MYO1A','MYOC','MYOF','NAALAD2','NBPF14','NBPF15','NEIL1','NLRP13','NLRP9','NOP16','NUDT8','OARD1','OBSCN','OCEL1','OR8S1','PAPLN','PDE11A','PDIA2','PGPEP1L','PHRF1','PKD1L2','PKHD1L1','PLA2G2C','PLA2G4D','PLA2R1','PLEKHG7','PLIN4','PNLIPRP3','POLM','POTEH','PPEF2','PPL','PPP1R3A','PRAMEF2','PRB1','PRB2','PRB4','PSG1','PSG11','PSG4','PSG9','PTCHD3','PTGDR','PXDNL','PZP','RAI1','RERGL','RETSAT','RFPL1','RGPD4','RGS11','RHD','RNF32','ROPN1B','RP1L1','RPTN','RTKN2','RTP1','SAMD11','SEMG2','SERHL2','SERPINA10','SERPINA9','SERPINB3','SFI1','SIGLEC1','SIGLEC5','SLC17A9','SLC22A10','SLC22A14','SLC22A25','SLC26A10','SLC5A4','SLCO1B1','SLFN13','SPATA31A6','SPATA4','SPATC1','SPNS3','SULT1A2','SULT1C4','SYNM','SYTL2','TAF6','TCF3','TCHHL1','TEKT3','TGM4','THBS4','THEM5','TIGD6','TLR10','TLR5','TMC2','TMEM82','TMIE','TMPRSS7','TNN','TRIM22','TRIM45','TRIM48','TRIM59','TRMT10B','TRMT2A','TTC38','TTN','UGT2B10','UGT2B17','UGT2B28','UMODL1','UNC93A','UPB1','UPK3A','UPP2','USP45','USP6','VILL','VWA3B','VWA7','WDR27','WDR90','XIRP1','XRRA1','ZAN','ZNF223','ZNF229','ZNF257','ZNF30','ZNF343','ZNF396','ZNF417','ZNF486','ZNF528','ZNF544','ZNF587','ZNF599','ZNF611','ZNF790','ZNF83','ZNF831','ZNF844','ZNF846','ZNF860','ZNF878','ZNF92','ZRANB3')
 
 gdf<-data.frame(gene=c(ibd,HI,LOFT),type=c(rep('IBD',length(IBD)),rep('HI',length(HI)),rep('LOFT',length(LOFT))))
   
