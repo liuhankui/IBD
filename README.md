@@ -96,6 +96,14 @@ ctd_file <- generate_celltype_data(
 )
 ```
 
+## IBD-analysis R script, you can start from here
+```
+git clone https://github.com/liuhankui/IBD
+cd IBD
+Rscript script.r
+```
+
+## or run step-by-step:
 ## required R packages
 ```
 library(RColorBrewer)
@@ -113,12 +121,6 @@ library(geomtextpath)
 library(intergraph)
 library(dendextend)
 library(polynom)
-```
-
-# IBD-analysis R script
-you can start from here
-```
-git clone https://github.com/liuhankui/IBD
 ```
 
 ## cell-type expression enrichment
