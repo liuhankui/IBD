@@ -81,7 +81,7 @@ library(EWCE)
 
 df<-read.table('IBD.counts.txt')
 cdf<-read.table('IBD.celltype.txt',sep='\t')
-annotLevels <- list(level1class = cdf[,1], level2class =cdf[,2])
+annotLevels <- list(level1class = cdf[,2], level2class =cdf[,1])
 df<-t(df[,-1])
 #names(df)<-paste0("I",seq(ncol(df)))
 gdf<-read.table('gene.txt')
@@ -128,15 +128,14 @@ load('./data/CellTypeData_IBD.rda')
 
 gdf<-read.table('data/ibd.gene')
 x<-unique(gdf$V1)
-
-bg<-attr(ctd[[2]]$specificity,'dimnames')[[1]]
+bg<-attr(ctd[[1]]$specificity,'dimnames')[[1]]
 hits<-x[x %in% bg]
 set.seed(2023)
 rdf<-bootstrap_enrichment_test(sct_data=ctd,
                                hits=hits,
                                bg=bg,
                                reps=10000,
-                               annotLevel=2
+                               annotLevel=1
                               )
 rdf$results$celltype<-row.names(rdf$results)
 rdf$results$FDR<-p.adjust(rdf$results$p,method='fdr')
