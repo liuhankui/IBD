@@ -128,7 +128,7 @@ library(RColorBrewer) #Fig1-3
 library(ggplot2)      #Fig1-3
 library(ggpubr)       #Fig1C
 library(geomtextpath) #Fig1DE
-library(intergraph)   #Fig1DE
+library(intergraph)   #Fig2
 library(Matrix)       #Fig2
 library(huge)         #Fig2
 library(igraph)       #Fig2
