@@ -117,7 +117,7 @@ zcat gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz|cut -f '1,2,5,21,33,34' > ./data/
 
 ## 2. IBD code script, you can start from here, step-by-step [R]
 ```
-git clone https://github.com/liuhankui/IBD
+git clone git clone --recursive https://github.com/liuhankui/IBD.git
 cd IBD
 R
 ```
