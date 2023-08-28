@@ -187,7 +187,7 @@ ggplot(df,aes(V1,V3/V4*100))+
 
 ## Fig. 1C
 ```
-df<-read.table('./data/IBD.Monocytes.txt')
+df<-read.table(gzfile('./data/IBD.Monocytes.txt.gz'))
 ss<-colSums(df)>0
 df<-df[,ss]
 df<-log(df+1)
@@ -217,9 +217,9 @@ ggplot(udf,aes(type,sd))+
         strip.text = element_text(size=12,colour="black"))+
   coord_cartesian(ylim=c(0,1.5))+
   geom_signif(comparisons =  list(c("IBD","HI"),
-                                  c('HI','LoFT'),
-                                  c('IBD','LoFT')),
-              parse = T,y_position = c(0.8,1,1.2),tip_length=0.01,
+                                  c('HI','LOFT'),
+                                  c('IBD','LOFT')),
+              parse = T,y_position = c(0.8,1,1.2),tip_length=0.01,test = "t.test",
               map_signif_level=function(w) {if(w<0.001){
                 f=round(w/10^floor(log10(abs(w))),2)
                 d=floor(log10(abs(w)))
@@ -236,7 +236,7 @@ for(i in seq(500000)){
 }
 pdf<-data.frame(mstrictness=pdf)
 
-ibd_s<-mean(sdf$sd[sdf3$gene %in% IBD])
+ibd_s<-mean(sdf$sd[sdf$V1 %in% IBD])
 dd<-density(pdf$mstrictness)
 mdf<-data.frame(mstrictness=dd$x,den=dd$y,source='Observed')
 ddf<-data.frame(mstrictness=seq(0.15,0.35,length=1000))
