@@ -66,11 +66,11 @@ cat celltype.txt|cut -f 4|paste - counts.txt|awk -F '\t' '{print $2 >> $1".count
 
 for i in HF HP HA IBD
 do
-#cat $i.celltype.txt|paste - $i.counts.txt|awk -v i=$i -F '\t' '$2=="Monocytes"{print $3 >> i".Monocytes.txt"}'
+cat $i.celltype.txt|paste - $i.counts.txt|awk -v i=$i -F '\t' '$2=="Monocytes"{print $3 >> i".Monocytes.txt"}'
 for j in Monocytes ILC3 Th1
 do
 echo -n "$i $j "
-cat $i.celltype.txt|awk -F '\t' -v c=$j '{if($2==c){a++};b++}END{print a,b}'
+cat $i.celltype.txt|awk -F '\t' -v c=$j -v a=0  -v b=0 '{if($2==c){a++};b++}END{print a,b}'
 done
 done > cell.counts.txt
 ```
@@ -176,7 +176,7 @@ ggplot(df,aes(celltype,-log10(p)))+
 ## Fig. 1B
 ```
 df<-read.table('cell.counts.txt')
-Fig1B<-ggplot(df,aes(V1,V3/V4*100))+
+ggplot(df,aes(V1,V3/V4*100))+
   geom_histogram(stat='identity',aes(fill=V2),colour='black',width=0.8,position='dodge')+
   scale_fill_brewer('',palette = 'Set2')+
   theme_classic()+
