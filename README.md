@@ -1,6 +1,6 @@
 # IBD analysis script 
 
-## prepare IBD genes and gut scRNA data
+## 1. prepare IBD genes and gut scRNA data
 ## Pre-stpep 1: IBD loci [shell]
 ```
 zcat dbsnp_138.b37.vcf.gz|awk '!/#/{print $1"_"$2,$3,$4,$5}' | sort -k1,1 -T ./tmp > pos2allele.txt
@@ -96,7 +96,7 @@ ctd_file <- generate_celltype_data(
 )
 ```
 
-## IBD-analysis R script, you can start from here, step-by-step
+## 2. IBD-analysis R script, you can start from here, step-by-step
 ```
 git clone https://github.com/liuhankui/IBD
 cd IBD
