@@ -132,7 +132,7 @@ library(dendextend)
 library(polynom)
 ```
 
-## cell-type expression enrichment
+## Fig. 1A
 
 ```
 source('./bin/bootstrap_enrichment_test.r')
@@ -155,10 +155,7 @@ rdf<-bootstrap_enrichment_test(sct_data=ctd,
 rdf$results$celltype<-row.names(rdf$results)
 rdf$results$FDR<-p.adjust(rdf$results$p,method='fdr')
 write.table(rdf$results,file='enrichment.txt',sep='\t',quote=F,row.names=F,col.names=T)
-```
 
-## Fig. 1A
-```
 df<-read.table('enrichment.txt',sep='\t',head=T)
 df$sign<-NA
 df$sign[df$FDR<0.05]<-'*'
