@@ -516,15 +516,15 @@ dev.off()
 
 ## Fig. 4
 ```
-kc1<-fastgreedy.community(gnet1)
-kc2<-fastgreedy.community(gnet2)
-kc3<-fastgreedy.community(gnet3)
-kc4<-fastgreedy.community(gnet4)
+dnd1<-fastgreedy.community(gnet1)
+dnd2<-fastgreedy.community(gnet2)
+dnd3<-fastgreedy.community(gnet3)
+dnd4<-fastgreedy.community(gnet4)
 
-dnd1 <- as.dendrogram(kc1)
-dnd2 <- as.dendrogram(kc2)
-dnd3 <- as.dendrogram(kc3)
-dnd4 <- as.dendrogram(kc4)
+dnd1 <- as.dendrogram(dnd1)
+dnd2 <- as.dendrogram(dnd2)
+dnd3 <- as.dendrogram(dnd3)
+dnd4 <- as.dendrogram(dnd4)
 dnd1 <- ladder(dnd1)
 dnd2 <- ladder(dnd2)
 dnd3 <- ladder(dnd3)
