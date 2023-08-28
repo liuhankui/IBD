@@ -525,6 +525,7 @@ dnd1 <- as.dendrogram(dnd1)
 dnd2 <- as.dendrogram(dnd2)
 dnd3 <- as.dendrogram(dnd3)
 dnd4 <- as.dendrogram(dnd4)
+
 dnd1 <- ladder(dnd1)
 dnd2 <- ladder(dnd2)
 dnd3 <- ladder(dnd3)
