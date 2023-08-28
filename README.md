@@ -115,21 +115,20 @@ R
 
 ## Require R packages
 ```
-library(RColorBrewer)
-library(ggplot2)
-library(ggrepel)
-library(ggpubr)
-library(plyr)
-library(reshape2)
-library(Matrix)
-library(huge)
-library(igraph)
-library(network)
-library(ggnetwork)
-library(geomtextpath)
-library(intergraph)
-library(dendextend)
-library(polynom)
+library(RColorBrewer) #Fig1-3
+library(ggplot2)      #Fig1-3
+library(ggpubr)       #Fig1C
+library(geomtextpath) #Fig1DE
+library(intergraph)   #Fig1DE
+library(Matrix)       #Fig2
+library(huge)         #Fig2
+library(igraph)       #Fig2
+library(network)      #Fig2
+library(ggnetwork)    #Fig2
+library(reshape2)     #Fig3A
+library(ggrepel)      #Fig3C
+library(dendextend)   #Fig4
+library(polynom)      #Fig4
 ```
 
 ## Fig. 1A
