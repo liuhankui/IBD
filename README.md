@@ -40,6 +40,7 @@ write.table(cdf,file='celltype.txt',quote=F,row.names=F,col.names=F,sep='\t')
 # $ indices: int [1:760344941(1d)] 15 53 102 154 216 223 244 269 271 326 ...
 # $ indptr : int [1:428470(1d)] 0 970 1672 2394 3141 4369 5545 6131 6906 7533 ...
 
+unlink('counts.txt')
 cells<-diff(indptr)
 marker<-seq(0,length(cells),by=1000)
 index<-1
@@ -59,17 +60,17 @@ for(k in marker){
 
 ## Pre-stpep 4: split data [shell]
 ```
-#rm -f *.celltype.txt *.counts.txt
-cat celltype.txt|awk -F '\t' '{print $2,$3 >> $4".celltype.txt"}'
+#rm -f *.celltype.txt *.counts.txt *.Monocytes.txt
+cat celltype.txt|awk -F '\t' '{print $2"\t"$3 >> $4".celltype.txt"}'
 cat celltype.txt|cut -f 4|paste - counts.txt|awk -F '\t' '{print $2 >> $1".counts.txt"}'
 
 for i in HF HP HA IBD
 do
-cat $i.celltype.txt|cut -f 3|paste - $i.counts.txt|awk -v i=$i -F '\t' '$1=="Monocytes"{print $2 >> i".Monocytes.txt"}'
+#cat $i.celltype.txt|paste - $i.counts.txt|awk -v i=$i -F '\t' '$2=="Monocytes"{print $3 >> i".Monocytes.txt"}'
 for j in Monocytes ILC3 Th1
 do
-echo -n "i j "
-cat $i.celltype.txt|awk -F '\t' -v c=$j '{if($3==c){a++};b++}END{print a,b}'
+echo -n "$i $j "
+cat $i.celltype.txt|awk -F '\t' -v c=$j '{if($2==c){a++};b++}END{print a,b}'
 done
 done > cell.counts.txt
 ```
@@ -77,17 +78,14 @@ done > cell.counts.txt
 ## Pre-stpep 5: calculate cell-type exrpression specificty [R]
 ```
 library(EWCE)
-library(ewceData)
-library(sctransform)
 
 df<-read.table('IBD.counts.txt')
-df<-t(df)
-names(df)<-paste0("I",seq(ncol(df)))
+cdf<-read.table('IBD.celltype.txt',sep='\t')
+annotLevels <- list(level1class = cdf[,1], level2class =cdf[,2])
+df<-t(df[,-1])
+#names(df)<-paste0("I",seq(ncol(df)))
 gdf<-read.table('gene.txt')
 row.names(df)<-gdf[,1]
-
-cdf<-read.table('IBD.celltype.txt',sep='\t')
-annotLevels <- list(level1class = cdf[,2], level2class =cdf[,3])
 
 ctd_file <- generate_celltype_data(
     exp=as.matrix(df),
@@ -103,7 +101,6 @@ library(ggrepel)
 library(ggpubr)
 library(plyr)
 library(reshape2)
-library(grid)
 library(igraph)
 library(scales)
 library(Matrix)
@@ -127,10 +124,10 @@ source('./bin/bootstrap_enrichment_test.r')
 source('./bin/cell_list_dist.r')
 source('./bin/generate_controlled_bootstrap_geneset.r')
 source('./bin/get_summed_proportions.r')
+load('./data/CellTypeData_IBD.rda')
 
 gdf<-read.table('data/ibd.gene')
 x<-unique(gdf$V1)
-load('./data/CellTypeData_PCD.rda')
 
 bg<-attr(ctd[[2]]$specificity,'dimnames')[[1]]
 hits<-x[x %in% bg]
@@ -537,3 +534,21 @@ tanglegram(rank_branches(dnd2), rank_branches(dnd1), edge.lwd = 2,
 
 
 
+```
+df<-read.table('IBD.counts.txt')
+cdf<-read.table('IBD.celltype.txt',sep='\t')
+names(cdf)[3]<-'CT'
+df<-cbind(cdf[,3,drop=F],df)
+df<-ddply(df,.(CT),function(x){colSums(x[-1])})
+annotLevels <- list(level1class = df[,1], level2class =df[,1])
+df<-t(df[,-1])
+names(df)<-paste0("I",seq(ncol(df)))
+gdf<-read.table('gene.txt')
+row.names(df)<-gdf[,1]
+
+ctd_file <- generate_celltype_data(
+    exp=as.matrix(df),
+    annotLevels=annotLevels,
+    groupName='IBD',savePath='./'
+)
+```
