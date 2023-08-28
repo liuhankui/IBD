@@ -113,7 +113,7 @@ cd IBD
 R
 ```
 
-## required R packages
+## Require R packages
 ```
 library(RColorBrewer)
 library(ggplot2)
@@ -271,7 +271,6 @@ ggplot()+
         axis.text = element_text(size=12,colour="black"),
         axis.title = element_text(size=15,colour="black"),
         strip.text = element_text(size=12,colour="black"))
-
 ```
 
 ## Fig. 1E
@@ -511,7 +510,6 @@ ggplot(ddf,aes(degree,center))+
         axis.title = element_text(size=15,colour="black"),
         strip.text = element_text(size=12,colour="black"))+
   geom_text_repel(data=ldf,aes(label=gene),size=3,box.padding = 0.1,max.overlaps=20)
-dev.off()
 ```
 
 ## Fig. 4
