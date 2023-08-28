@@ -96,6 +96,12 @@ ctd_file <- generate_celltype_data(
 )
 ```
 
+## Pre-stpep 6: get gene z-score from gnomAD [shell]
+```
+wget https://storage.googleapis.com/gcp-public-data--gnomad/release/2.1.1/constraint/gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz
+zcat gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz|cut -f '1,2,5,21,33,34' > ./data/gene.zscore
+```
+
 ## 2. IBD-analysis R script, you can start from here, step-by-step
 ```
 git clone https://github.com/liuhankui/IBD
