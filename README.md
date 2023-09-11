@@ -158,17 +158,13 @@ rdf<-bootstrap_enrichment_test(sct_data=ctd,
                                hits=hits,
                                bg=bg,
                                reps=10000,
-                               annotLevel=1
-                              )
+                               annotLevel=1)
 rdf$results$celltype<-row.names(rdf$results)
 rdf$results$FDR<-p.adjust(rdf$results$p,method='fdr')
 write.table(rdf$results,file='enrichment.txt',sep='\t',quote=F,row.names=F,col.names=T)
 
 df<-read.table('enrichment.txt',sep='\t',head=T)
-df$sign<-NA
-df$sign[df$FDR<0.05]<-'*'
-df$sign[df$FDR<0.01]<-'**'
-df$sign[df$FDR<0.005]<-'***'
+df$sign<-ifelse(df$FDR<0.05,'*',ifelse(df$FDR<0.01,'**',ifelse(df$FDR<0.005,'***',NA)))
 
 ggplot(df,aes(celltype,-log10(p)))+
   geom_histogram(stat='identity')+
