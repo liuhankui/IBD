@@ -25,7 +25,7 @@ vep --assembly GRCh37 -i ibd.vcf -o ibd.vep --vcf --merged --offline --use_given
 ```
 # Elmentaite, R. et al. Cells of the human intestinal tract mapped across space and time. Nature 597, 250–255 (2021)
 wget --no-check-certificate https://cellgeni.cog.sanger.ac.uk/gutcellatlas/Full_obj_raw_counts_nosoupx_v2.h5ad
-warning: 5.8G file size
+# warning: 5.8G file size
 ```
 
 ## Pre-step 3: get counts from h5 file format [R]
