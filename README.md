@@ -18,7 +18,7 @@ join ibd.pos pos2allele.txt|awk '{if($1!=s){print $1,$2,$6,$7,"D1="$3";D2="$4};s
 # VEP, https://github.com/Ensembl/ensembl-vep
 # warning: install vep and download cache
 
-vep --assembly GRCh37 --fork 4 -i ibd.vcf -o ibd.vep --vcf --no_stats --merged --force_overwrite --offline --use_given_ref --per_gene --symbol --canonical --protein --biotype --nearest symbol --fasta hg19.fa.gz --dir_cache ./cache
+vep --assembly GRCh37 -i ibd.vcf -o ibd.vep --vcf --merged --offline --use_given_ref --per_gene --symbol --canonical --protein --biotype --nearest symbol --fasta hg19.fa.gz --dir_cache ./cache
 ```
 
 ## Pre-step 2: get gut scRNA data [shell]
