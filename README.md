@@ -372,6 +372,8 @@ ggplot(zdf,aes(x=lof_z,group = type))+
 
 ## Fig. 2
 ```
+#discovery
+
 gdf<-read.table('./data/ibd.gene')
 gene<-read.table('./data/discovery.gene.txt')$V1
 
@@ -482,7 +484,8 @@ netA<-ggplot(ndf,aes(x = x, y = y, xend = xend, yend = yend)) +
   theme_blank()+
   theme(panel.border = element_rect(colour='black',fill=NA))
 
-#-------rep--------------
+#replication
+
 gdf<-read.table('ibd.gene')
 gene<-read.table('replication.immune.h5ad.gene.txt')$V1
 dfr<-read.table(gzfile('replication.monocyte.gz'))
@@ -491,7 +494,7 @@ dfr<-read.table(gzfile('replication.monocyte.gz'))
 gene<-gene[gene %in% gdf$V1] # subset data at github
 names(dfr)<-c('V1','V2','V3',gene) # subset data at github
 
-# aCD Infl
+#-----------network aCD Infl----------------------
 df<-dfr[dfr$V1=="Crohn_disease" & dfr$V2=="sigmoid_colon" & dfr$V3=="Infl",-c(1,2,3)]
 df<-df[,colSums(df)>0]
 df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
@@ -513,7 +516,7 @@ net1<-net
 ndf1<-ggnetwork(net)
 ndf1$source<-'Adult CD inflammation'
 
-#aCD NonI---------------
+#-----------network aCD NonI----------------------
 df<-dfr[dfr$V1=="Crohn_disease" & dfr$V2=="right_colon" & dfr$V3=="NonI",-c(1,2,3)]
 df<-df[,colSums(df)>0]
 df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
@@ -535,7 +538,7 @@ net2<-net
 ndf2<-ggnetwork(net)
 ndf2$source<-'Adult CD non-inflammation'
 
-#-----------HC----------------------
+#-----------network HA----------------------
 df<-dfr[dfr$V1=="normal" & dfr$V2=='right_colon',-c(1,2,3)]
 df<-df[,colSums(df)>0]
 df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
@@ -733,7 +736,7 @@ source('./bin/cell_list_dist.r')
 source('./bin/generate_controlled_bootstrap_geneset.r')
 source('./bin/get_summed_proportions.r')
 
-load('D:/IBD/ctd_aCD.rda')
+load('ctd_aCD.rda')
 gdf<-read.table('ibd.gene')
 x<-unique(gdf$V1)
 bg<-row.names(ctd[[1]]$specificity)
@@ -858,4 +861,3 @@ figs2C<-ggplot(ddf,aes(degree,center))+
 figs2AB<-ggarrange(figsA,figsB,nrow=1,widths = c(1,1))
 ggarrange(figs2AB,figs2C,ncol=1,heights  = c(1,1))
 ```
-
