@@ -21,19 +21,35 @@ join ibd.pos pos2allele.txt|awk '{if($1!=s){print $1,$2,$6,$7,"D1="$3";D2="$4};s
 vep --assembly GRCh37 -i ibd.vcf -o ibd.vep --vcf --merged --offline --use_given_ref --per_gene --symbol --canonical --protein --biotype --nearest symbol --fasta hg19.fa.gz --dir_cache ./cache
 ```
 
-## Pre-step 2: get gut scRNA data [shell]
+## Pre-step 2: get gene z-score from gnomAD [shell]
+```
+wget https://storage.googleapis.com/gcp-public-data--gnomad/release/2.1.1/constraint/gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz
+zcat gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz|cut -f '1,2,5,21,33,34' > ./data/gene.zscore
+```
+
+## Pre-step 3: get discovery scRNA data [shell]
 ```
 # Elmentaite, R. et al. Cells of the human intestinal tract mapped across space and time. Nature 597, 250–255 (2021)
-wget --no-check-certificate https://cellgeni.cog.sanger.ac.uk/gutcellatlas/Full_obj_raw_counts_nosoupx_v2.h5ad
+wget --no-check-certificate https://cellgeni.cog.sanger.ac.uk/gutcellatlas/Full_obj_raw_counts_nosoupx_v2.h5ad -O discovery.h5ad
 # warning: 5.8G file size
 ```
 
-## Pre-step 3: get counts from h5 file format [R]
+## Pre-step 4: get replication scRNA data [shell]
+```
+# colon immune
+wget https://datasets.cellxgene.cziscience.com/18ddb5f7-d6fe-4fb4-9621-f231fe19088b.h5ad -O replication.immune.h5ad
+# colon epithelial
+wget https://datasets.cellxgene.cziscience.com/6afb8034-4a11-4a08-8ec2-048968865db9.h5ad -O replication.epithelial.h5ad
+# colon stromal
+wget https://datasets.cellxgene.cziscience.com/9531d09f-bcd9-48b6-a545-3bdcc5c7cfe1.h5ad -O replication.stromal.h5ad
+```
+
+## Pre-step 5: get counts from discovery h5ad file format [R]
 ```
 library(rhdf5)
 library(Matrix)
 
-h5<-H5Fopen("Full_obj_raw_counts_nosoupx.h5ad")
+h5<-H5Fopen("discovery.h5ad")
 indptr<-h5$'X/indptr'
 gdf<-data.frame(
      symbol=h5$'var/_index',
@@ -44,17 +60,17 @@ cdf<-data.frame(
       Category=as.character(factor(h5$'obs/category',levels=0:(length(h5$'obs/__categories/category')-1),labels=h5$'obs/__categories/category')),
       Subtype=as.character(factor(h5$'obs/Integrated_05',levels=0:(length(h5$'obs/__categories/Integrated_05')-1),labels=h5$'obs/__categories/Integrated_05'))
 )
-cdf$sample<-as.character(factor(cdf$Diagnosis,levels=c('fetal','Healthy adult','Pediatric Crohn Disease','Pediatric healthy'),labels=c('HF','HA','IBD','HP')))
+cdf$sample<-as.character(factor(cdf$Diagnosis,levels=c('fetal','Healthy adult','Pediatric Crohn Disease','Pediatric healthy'),labels=c('HF','HA','pCD','HP')))
 h5closeAll()
 
-write.table(gdf,file='gene.txt',quote=F,row.names=F,col.names=F,sep='\t')
-write.table(cdf,file='celltype.txt',quote=F,row.names=F,col.names=F,sep='\t')
+write.table(gdf,file='discovery.gene.txt',quote=F,row.names=F,col.names=F,sep='\t')
+write.table(cdf,file='discovery.celltype.txt',quote=F,row.names=F,col.names=F,sep='\t')
 
 # $ data   : num [1:760344941(1d)] 1 1 1 4 1 1 1 1 1 1 ...
 # $ indices: int [1:760344941(1d)] 15 53 102 154 216 223 244 269 271 326 ...
 # $ indptr : int [1:428470(1d)] 0 970 1672 2394 3141 4369 5545 6131 6906 7533 ...
 
-unlink('counts.txt')
+unlink('discovery.counts.txt')
 cells<-diff(indptr)
 marker<-seq(0,length(cells),by=1000)
 index<-1
@@ -64,21 +80,20 @@ for(k in marker){
   if(end>length(cells)){end<-length(cells)}
   rowN<-rep(1:(end-start+1),cells[start:end])
   num<-length(rowN)
-  colN<-h5read("Full_obj_raw_counts_nosoupx.h5ad", "/X/indices", index=list(index:(index+num-1)))
-  counts<-h5read("Full_obj_raw_counts_nosoupx.h5ad", "/X/data", index=list(index:(index+num-1)))
+  colN<-h5read("discovery.h5ad", "/X/indices", index=list(index:(index+num-1)))
+  counts<-h5read("discovery.h5ad", "/X/data", index=list(index:(index+num-1)))
   index<-index+num
-  df<-as.matrix(sparseMatrix(i = rowN, j = colN + 1,x = as.numeric(counts),dims=c(end-start+1,33538)))
-  write.table(df,file="counts.txt",append=T,quote=F,row.names=F,col.names=F,sep=' ')
+  df<-as.matrix(sparseMatrix(i = rowN, j = colN + 1,x = as.numeric(counts),dims=c(end-start+1,nrow(gdf))))
+  write.table(df,file="discovery.counts.txt",append=T,quote=F,row.names=F,col.names=F,sep=' ')
 }
 ```
 
-## Pre-step 4: split data [shell]
+## Pre-step 6: split discovery data [shell]
 ```
-#rm -f *.celltype.txt *.counts.txt *.Monocytes.txt
-cat celltype.txt|awk -F '\t' '{print $2"\t"$3 >> $4".celltype.txt"}'
-cat celltype.txt|cut -f 4|paste - counts.txt|awk -F '\t' '{print $2 >> $1".counts.txt"}'
+cat discovery.celltype.txt|awk -F '\t' '{print $2"\t"$3 >> $4".celltype.txt"}'
+cat discovery.celltype.txt|cut -f 4|paste - discovery.counts.txt|awk -F '\t' '{print $2 >> $1".counts.txt"}'
 
-for i in HF HP HA IBD
+for i in HF HP HA pCD
 do
 cat $i.celltype.txt|paste - $i.counts.txt|awk -v i=$i -F '\t' '$2=="Monocytes"{print $3 >> i".Monocytes.txt"}'
 cat $i.Monocytes.txt|gzip -f > ./data/$i.Monocytes.txt.gz
@@ -90,29 +105,87 @@ done
 done > ./data/cell.counts.txt
 ```
 
-## Pre-step 5: calculate cell-type exrpression specificty [R]
+## Pre-step 7: calculate cell-type exrpression specificty from pCD data [R]
 ```
 library(EWCE)
 
-df<-read.table('./IBD.counts.txt')
-cdf<-read.table('./IBD.celltype.txt',sep='\t')
+df<-read.table('./pCD.counts.txt')
+cdf<-read.table('./pCD.celltype.txt',sep='\t')
 annotLevels <- list(level1class = cdf[,2], level2class =cdf[,1])
 df<-t(df[,-1])
 #names(df)<-paste0("I",seq(ncol(df)))
-gdf<-read.table('gene.txt')
+gdf<-read.table('discovery.gene.txt')
 row.names(df)<-gdf[,1]
 
 ctd_file <- generate_celltype_data(
     exp=as.matrix(df),
     annotLevels=annotLevels,
-    groupName='IBD',savePath='./data/'
+    groupName='pCD',savePath='./data/'
 )
 ```
 
-## Pre-step 6: get gene z-score from gnomAD [shell]
+
+## Pre-step 8: get counts from replication h5ad file format [R]
 ```
-wget https://storage.googleapis.com/gcp-public-data--gnomad/release/2.1.1/constraint/gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz
-zcat gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz|cut -f '1,2,5,21,33,34' > ./data/gene.zscore
+library(rhdf5)
+library(Matrix)
+for(h5file in c('replication.immune.h5ad','replication.epithelial.h5ad','replication.stromal.h5ad')){
+  h5<-H5Fopen(h5file)
+  gdf<-data.frame(symbol=as.character(factor(h5$'var/feature_name/codes',levels=0:(length(h5$'var/feature_name/codes')-1),labels=h5$'var/feature_name/categories'))
+  cdf<-data.frame(
+      Diagnosis=as.character(factor(h5$'obs/disease/codes',levels=0:(length(h5$'obs/disease/categories')-1),labels=h5$'obs/disease/categories')),
+      Category=as.character(factor(h5$'obs/cell_type/codes',levels=0:(length(h5$'obs/cell_type/categories')-1),labels=h5$'obs/cell_type/categories')),
+      Subtype=as.character(factor(h5$'obs/Celltype/codes',levels=0:(length(h5$'obs/Celltype/categories')-1),labels=h5$'obs/Celltype/categories')),
+      Tissue=as.character(factor(h5$'obs/tissue/codes',levels=0:(length(h5$'obs/tissue/categories')-1),labels=h5$'obs/tissue/categories')),
+      Status=as.character(factor(h5$'obs/Type/codes',levels=0:(length(h5$'obs/Type/categories')-1),labels=h5$'obs/Type/categories'))
+  )
+  indptr<-h5$'X/indptr'
+  h5closeAll()
+  write.table(cdf,file=paste0(h5file,'.celltype.txt'),quote=F,row.names=F,col.names=F,sep='\t')
+  write.table(gdf,file=paste0(h5file,'.gene.txt'),quote=F,row.names=F,col.names=F,sep='\t')
+
+  unlink(paste0(h5file,".counts.txt"))
+  cells<-diff(indptr)
+  marker<-seq(0,length(cells),by=1000)
+  index<-1
+  for(k in marker){
+    start<-k+1
+    end<-k+1000
+    if(end>length(cells)){end<-length(cells)}
+    rowN<-rep(1:(end-start+1),cells[start:end])
+    num<-length(rowN)
+    colN<-h5read(args[6], "/X/indices", index=list(index:(index+num-1)))
+    counts<-h5read(args[6], "/X/data", index=list(index:(index+num-1)))
+    index<-index+num
+    df<-as.matrix(sparseMatrix(i = rowN, j = colN + 1,x = as.numeric(counts),dims=c(end-start+1,27345)))
+    write.table(df,file=paste0(h5file,".counts.txt"),append=T,quote=F,row.names=F,col.names=F,sep=' ')
+  }
+}
+```
+
+## Pre-step 9: split replication data [shell]
+```
+cat replication.immune.h5ad.celltype.txt|tr ' ' '_'|paste - replication.immune.h5ad.counts.txt|awk -F '\t' '$2=="monocyte"{print $1,$4,$5,$6}'|gzip -f >  replication.monocyte.gz
+cat replication.immune.h5ad.celltype.txt eplication.epithelial.h5ad.celltype.txt replication.stromal.h5ad.celltype.txt|tr ' ' '_' >  replication.celltype.txt
+cat replication.immune.h5ad.counts.txt eplication.epithelial.h5ad.counts.txt replication.stromal.h5ad.counts.txt|paste replication.celltype.txt -|awk -F '\t' '$1=="Crohn_disease"{print $2,$3,$6}'|gzip -f > aCD.counts.txt.gz
+```
+
+## Pre-step 10: calculate cell-type exrpression specificty from aCD data [R]
+```
+library(EWCE)
+
+df<-read.table(gzfile('./aCD.counts.txt.gz'))
+annotLevels <- list(level1class = df[,2], level2class =df[,1])
+df<-t(df[,-c(1,2)])
+#names(df)<-paste0("I",seq(ncol(df)))
+gdf<-read.table('replication.immune.h5ad.gene.txt')
+row.names(df)<-gdf[,1]
+
+ctd_file <- generate_celltype_data(
+    exp=as.matrix(df),
+    annotLevels=annotLevels,
+    groupName='aCD',savePath='./data/'
+)
 ```
 
 ## 2. IBD code script, you can start from here, step-by-step [R]
@@ -147,11 +220,11 @@ source('./bin/bootstrap_enrichment_test.r')
 source('./bin/cell_list_dist.r')
 source('./bin/generate_controlled_bootstrap_geneset.r')
 source('./bin/get_summed_proportions.r')
-load('./data/CellTypeData_IBD.rda')
+load('./data/CellTypeData_pCD.rda')
 
 gdf<-read.table('./data/ibd.gene')
 x<-unique(gdf$V1)
-bg<-attr(ctd[[1]]$specificity,'dimnames')[[1]]
+bg<-rownames(ctd[[1]]$specificity)
 hits<-x[x %in% bg]
 set.seed(2023)
 rdf<-bootstrap_enrichment_test(sct_data=ctd,
@@ -185,8 +258,9 @@ ggplot(df,aes(celltype,-log10(p)))+
 ## Fig. 1B
 ```
 df<-read.table('./data/cell.counts.txt')
-ggplot(df,aes(V1,V3/V4*100))+
-  geom_histogram(stat='identity',aes(fill=V2),colour='black',width=0.8,position='dodge')+
+ggplot(df,aes(V1,V3/V4*100)+
+  geom_histogram(stat='identity',aes(fill=V2,group=V2),colour='black',width=0.8,position='dodge')+
+  geom_text(aes(V1,label=V3,group=V2),position=position_dodge(width = 0.9),hjust=-0.25)+
   scale_fill_brewer('',palette = 'Set2')+
   theme_classic()+
   coord_flip()+
@@ -202,11 +276,11 @@ ggplot(df,aes(V1,V3/V4*100))+
 
 ## Fig. 1C
 ```
-df<-read.table(gzfile('./data/IBD.Monocytes.txt.gz'))
+df<-read.table(gzfile('./data/pCD.Monocytes.txt.gz'))
 ss<-colSums(df)>0
 df<-df[,ss]
 df<-log(df+1)
-sdf<-read.table('./data/gene.txt')
+sdf<-read.table('./data/discovery.gene.txt')
 sdf<-sdf[ss,]
 sdf$sd<-apply(df,2,function(x){1/sd(x/mean(x))})
 
@@ -299,11 +373,10 @@ ggplot(zdf,aes(x=lof_z,group = type))+
 ## Fig. 2
 ```
 gdf<-read.table('./data/ibd.gene')
-gene<-read.table('./data/gene.txt')
-gene<-gene$V1
+gene<-read.table('./data/discovery.gene.txt')$V1
 
-#-----------network IBD----------------------
-df<-read.table(gzfile('./data/IBD.Monocytes.txt.gz'))
+#-----------network pCD----------------------
+df<-read.table(gzfile('./data/pCD.Monocytes.txt.gz'))
 names(df)<-gene
 df<-df[,gene %in% gdf$V1]
 df<-df[,colSums(df)>0]
@@ -314,19 +387,16 @@ cor.matrix<- cor(df,use = "pairwise.complete.obs")
 mbModel <- huge(as.matrix(df), method = "mb")
 mbOptRIC = huge.select(mbModel,criterion="stars")
 mbOptRICGraph = mbOptRIC$refit
-net<-network(mbOptRICGraph)
-gnet1<-as.undirected(set_vertex_attr(asIgraph(net),"name", value = names(df)))
-network.vertex.names(net)<-names(df)
-
+adj<-as.matrix(mbOptRICGraph)
+net<-igraph::graph_from_adjacency_matrix(adj,mode="undirected")
 tmp<-as.matrix(sparseMatrix(i=mbOptRIC$refit@i+1,p=mbOptRIC$refit@p,x=mbOptRIC$refit@x,dims=c(ncol(df),ncol(df))),diag=T)
-net %e% "weights"<-abs(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)])
-net %e% "type"<- as.character(factor(sign(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)]),levels=c(-1,0,1),labels=c('N','P','P')))
-gid<-names(df)
-net %v% "size" = as.numeric(exp)
-net %v% "colour" = as.character(factor(gid,levels=gdf$V1[gdf$V1 %in% gid],labels=gdf$V2[gdf$V1 %in% gid]))
-
+igraph::V(net)$name<-names(df)
+igraph::V(net)$size<-as.numeric(exp)
+igraph::E(net)$weight<-abs(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)])
+igraph::V(net)$colour<-as.character(factor(V(net)$name,levels=gdf$V1[gdf$V1 %in% V(net)$name],labels=gdf$V2[gdf$V1 %in% V(net)$name]))
+gnet1<-net
 ndf1<-ggnetwork(net)
-ndf1$source<-'Paediatric IBD'
+ndf1$source<-'Paediatric CD'
 
 #-----------network HP----------------------
 df<-read.table(gzfile('./data/HP.Monocytes.txt.gz'))
@@ -340,17 +410,14 @@ cor.matrix<- cor(df,use = "pairwise.complete.obs")
 mbModel <- huge(as.matrix(df), method = "mb")
 mbOptRIC = huge.select(mbModel,criterion="stars")
 mbOptRICGraph = mbOptRIC$refit
-net<-network(mbOptRICGraph)
-gnet2<-as.undirected(set_vertex_attr(asIgraph(net),"name", value = names(df)))
-network.vertex.names(net)<-names(df)
-
+adj<-as.matrix(mbOptRICGraph)
+net<-igraph::graph_from_adjacency_matrix(adj,mode="undirected")
 tmp<-as.matrix(sparseMatrix(i=mbOptRIC$refit@i+1,p=mbOptRIC$refit@p,x=mbOptRIC$refit@x,dims=c(ncol(df),ncol(df))),diag=T)
-net %e% "weights"<-abs(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)])
-net %e% "type"<- as.character(factor(sign(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)]),levels=c(-1,0,1),labels=c('N','P','P')))
-gid<-names(df)
-net %v% "size" = as.numeric(exp)
-net %v% "colour" = as.character(factor(gid,levels=gdf$V1[gdf$V1 %in% gid],labels=gdf$V2[gdf$V1 %in% gid]))
-
+igraph::V(net)$name<-names(df)
+igraph::V(net)$size<-as.numeric(exp)
+igraph::E(net)$weight<-abs(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)])
+igraph::V(net)$colour<-as.character(factor(V(net)$name,levels=gdf$V1[gdf$V1 %in% V(net)$name],labels=gdf$V2[gdf$V1 %in% V(net)$name]))
+gnet2<-net
 ndf2<-ggnetwork(net)
 ndf2$source<-'Paediatric Healthy'
 
@@ -366,18 +433,14 @@ cor.matrix<- cor(df,use = "pairwise.complete.obs")
 mbModel <- huge(as.matrix(df), method = "mb")
 mbOptRIC = huge.select(mbModel,criterion="stars")
 mbOptRICGraph = mbOptRIC$refit
-net<-network(mbOptRICGraph)
-gnet3<-as.undirected(set_vertex_attr(asIgraph(net),"name", value = names(df)))
-#net<-network(mbModel$path[[3]])
-network.vertex.names(net)<-names(df)
-
+adj<-as.matrix(mbOptRICGraph)
+net<-igraph::graph_from_adjacency_matrix(adj,mode="undirected")
 tmp<-as.matrix(sparseMatrix(i=mbOptRIC$refit@i+1,p=mbOptRIC$refit@p,x=mbOptRIC$refit@x,dims=c(ncol(df),ncol(df))),diag=T)
-net %e% "weights"<-abs(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)])
-net %e% "type"<- as.character(factor(sign(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)]),levels=c(-1,0,1),labels=c('N','P','P')))
-gid<-names(df)
-net %v% "size" = as.numeric(exp)
-net %v% "colour" = as.character(factor(gid,levels=gdf$V1[gdf$V1 %in% gid],labels=gdf$V2[gdf$V1 %in% gid]))
-
+igraph::V(net)$name<-names(df)
+igraph::V(net)$size<-as.numeric(exp)
+igraph::E(net)$weight<-abs(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)])
+igraph::V(net)$colour<-as.character(factor(V(net)$name,levels=gdf$V1[gdf$V1 %in% V(net)$name],labels=gdf$V2[gdf$V1 %in% V(net)$name]))
+gnet3<-net
 ndf3<-ggnetwork(net)
 ndf3$source<-'Fetal Healthy'
 
@@ -393,33 +456,121 @@ cor.matrix<- cor(df,use = "pairwise.complete.obs")
 mbModel <- huge(as.matrix(df), method = "mb")
 mbOptRIC = huge.select(mbModel,criterion="stars")
 mbOptRICGraph = mbOptRIC$refit
-net<-network(mbOptRICGraph)
-gnet4<-as.undirected(set_vertex_attr(asIgraph(net),"name", value = names(df)))
-network.vertex.names(net)<-names(df)
-
+adj<-as.matrix(mbOptRICGraph)
+net<-igraph::graph_from_adjacency_matrix(adj,mode="undirected")
 tmp<-as.matrix(sparseMatrix(i=mbOptRIC$refit@i+1,p=mbOptRIC$refit@p,x=mbOptRIC$refit@x,dims=c(ncol(df),ncol(df))),diag=T)
-net %e% "weights"<-abs(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)])
-net %e% "type"<- as.character(factor(sign(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)]),levels=c(-1,0,1),labels=c('N','P','P')))
-gid<-names(df)
-net %v% "size" = as.numeric(exp)
-net %v% "colour" = as.character(factor(gid,levels=gdf$V1[gdf$V1 %in% gid],labels=gdf$V2[gdf$V1 %in% gid]))
-
+igraph::V(net)$name<-names(df)
+igraph::V(net)$size<-as.numeric(exp)
+igraph::E(net)$weight<-abs(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)])
+igraph::V(net)$colour<-as.character(factor(V(net)$name,levels=gdf$V1[gdf$V1 %in% V(net)$name],labels=gdf$V2[gdf$V1 %in% V(net)$name]))
+gnet4<-net
 ndf4<-ggnetwork(net)
 ndf4$source<-'Adult Healthy'
 
 #----network merge----------------
 ndf<-rbind(ndf1,ndf2,ndf3,ndf4)
 ndf$source<-factor(ndf$source,levels=unique(ndf$source),order=T)
-ggplot(ndf,aes(x = x, y = y, xend = xend, yend = yend)) +
-  geom_edges(aes(linewidth=weights),colour='gray') +
-  geom_nodes(aes(colour=colour,size=size),alpha = 0.5) +
-  geom_nodes(aes(colour=colour,size=size/5))+
-  geom_nodetext_repel(aes(label=vertex.names),size=2,box.padding = 0.1)+
-  scale_color_brewer('Diseases',palette = "Set2") +
+netA<-ggplot(ndf,aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_edges(aes(linewidth=weight),colour='gray') +
+  geom_nodes(aes(colour=colour,size=size))+
+  geom_nodetext_repel(aes(label=name),size=2,box.padding = 0.1)+
+  scale_color_brewer('Genes',palette = "Set2") +
   scale_linewidth_continuous('Correlations',range = c(0.1,1))+
-  scale_size('Expression(log[C+1])')+
-  facet_wrap(~source,scale='free')+
-  theme_blank()
+  scale_size('Expression')+
+  facet_wrap(~source,scale='free',nrow=2)+
+  ggtitle('A')+
+  theme_blank()+
+  theme(panel.border = element_rect(colour='black',fill=NA))
+
+#-------rep--------------
+gdf<-read.table('ibd.gene')
+gene<-read.table('replication.immune.h5ad.gene.txt')$V1
+dfr<-read.table(gzfile('replication.monocyte.gz'))
+names(dfr)<-c('V1','V2','V3',gene)
+dfr<-dfr[,c(rep(T,3),gene %in% gdf$V1)]
+
+# aCD Infl
+df<-dfr[dfr$V1=="Crohn_disease" & dfr$V2=="sigmoid_colon" & dfr$V3=="Infl",]
+df<-df[,colSums(df)>0]
+df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
+df<-log(df+1)
+exp<-colSums(df)/nrow(df)
+cor.matrix<- cor(df,use = "pairwise.complete.obs")
+mbModel <- huge(as.matrix(df), method = "mb")
+set.seed(2023)
+mbOptRIC = huge.select(mbModel,criterion="stars")
+mbOptRICGraph = mbOptRIC$refit
+adj<-as.matrix(mbOptRICGraph)
+net<-igraph::graph_from_adjacency_matrix(adj,mode="undirected")
+tmp<-as.matrix(sparseMatrix(i=mbOptRIC$refit@i+1,p=mbOptRIC$refit@p,x=mbOptRIC$refit@x,dims=c(ncol(df),ncol(df))),diag=T)
+igraph::V(net)$name<-names(df)
+igraph::V(net)$size<-as.numeric(exp)
+igraph::E(net)$weight<-abs(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)])
+igraph::V(net)$colour<-as.character(factor(V(net)$name,levels=gdf$V1[gdf$V1 %in% V(net)$name],labels=gdf$V2[gdf$V1 %in% V(net)$name]))
+net1<-net
+ndf1<-ggnetwork(net)
+ndf1$source<-'Adult CD inflammation'
+
+#aCD NonI---------------
+df<-dfr[dfr$V1=="Crohn_disease" & dfr$V2=="right_colon" & dfr$V3=="NonI",]
+df<-df[,colSums(df)>0]
+df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
+df<-log(df+1)
+exp<-colSums(df)/nrow(df)
+cor.matrix<- cor(df,use = "pairwise.complete.obs")
+mbModel <- huge(as.matrix(df), method = "mb")
+set.seed(2023)
+mbOptRIC = huge.select(mbModel,criterion="stars")
+mbOptRICGraph = mbOptRIC$refit
+adj<-as.matrix(mbOptRICGraph)
+net<-igraph::graph_from_adjacency_matrix(adj,mode="undirected")
+tmp<-as.matrix(sparseMatrix(i=mbOptRIC$refit@i+1,p=mbOptRIC$refit@p,x=mbOptRIC$refit@x,dims=c(ncol(df),ncol(df))),diag=T)
+igraph::V(net)$name<-names(df)
+igraph::V(net)$size<-as.numeric(exp)
+igraph::E(net)$weight<-abs(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)])
+igraph::V(net)$colour<-as.character(factor(V(net)$name,levels=gdf$V1[gdf$V1 %in% V(net)$name],labels=gdf$V2[gdf$V1 %in% V(net)$name]))
+net2<-net
+ndf2<-ggnetwork(net)
+ndf2$source<-'Adult CD non-inflammation'
+
+#-----------HC----------------------
+df<-dfr[dfr$V1=="normal" & dfr$V2=='right_colon',]
+df<-df[,colSums(df)>0]
+df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
+df<-log(df+1)
+exp<-colSums(df)/nrow(df)
+cor.matrix<- cor(df,use = "pairwise.complete.obs")
+mbModel <- huge(as.matrix(df), method = "mb")
+set.seed(2023)
+mbOptRIC = huge.select(mbModel,criterion="stars")
+mbOptRICGraph = mbOptRIC$refit
+adj<-as.matrix(mbOptRICGraph)
+net<-igraph::graph_from_adjacency_matrix(adj,mode="undirected")
+tmp<-as.matrix(sparseMatrix(i=mbOptRIC$refit@i+1,p=mbOptRIC$refit@p,x=mbOptRIC$refit@x,dims=c(ncol(df),ncol(df))),diag=T)
+igraph::V(net)$name<-names(df)
+igraph::V(net)$size<-as.numeric(exp)
+igraph::E(net)$weight<-abs(cor.matrix[which(tmp==1 & lower.tri(tmp),arr.ind=TRUE)])
+igraph::V(net)$colour<-as.character(factor(V(net)$name,levels=gdf$V1[gdf$V1 %in% V(net)$name],labels=gdf$V2[gdf$V1 %in% V(net)$name]))
+net3<-net
+ndf3<-ggnetwork(net)
+ndf3$source<-'Healthy adult'
+
+ndf<-rbind(ndf1,ndf2,ndf3)
+ndf$source<-factor(ndf$source,levels=unique(ndf$source),order=T)
+netB<-ggplot(ndf,aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_edges(aes(linewidth=weight),colour='gray') +
+  geom_nodes(aes(colour=colour,size=size))+
+  geom_nodetext_repel(aes(label=name),size=2,box.padding = 0.1)+
+  scale_color_brewer('Genes',palette = "Set2") +
+  scale_linewidth_continuous('Correlations',range = c(0.1,1))+
+  scale_size('Expression')+
+  facet_wrap(~source,scale='free',nrow=2)+
+  ggtitle('B')+
+  theme_blank()+
+  theme(panel.border = element_rect(colour='black',fill=NA))
+
+ggarrange(netA,netB,nrow=2,heights = c(1,1))
+
 ```
 
 
@@ -436,7 +587,7 @@ cl<-function(g){
   return(cc)
 }
 
-tmp1<-data.frame(V=length(V(gnet1)),E=length(E(gnet1)),D=graph.density(gnet1),T=transitivity(gnet1),C=cl(gnet1),S='IBD')
+tmp1<-data.frame(V=length(V(gnet1)),E=length(E(gnet1)),D=graph.density(gnet1),T=transitivity(gnet1),C=cl(gnet1),S='pCD')
 tmp2<-data.frame(V=length(V(gnet2)),E=length(E(gnet2)),D=graph.density(gnet2),T=transitivity(gnet2),C=cl(gnet2),S='PH')
 tmp3<-data.frame(V=length(V(gnet3)),E=length(E(gnet3)),D=graph.density(gnet3),T=transitivity(gnet3),C=cl(gnet3),S='FH')
 tmp4<-data.frame(V=length(V(gnet4)),E=length(E(gnet4)),D=graph.density(gnet4),T=transitivity(gnet4),C=cl(gnet4),S='AH')
@@ -465,7 +616,7 @@ ggplot()+
 ```
 tmp1<-data.frame(degree=igraph::degree(gnet1),center=betweenness(gnet1))
 tmp1$gene<-row.names(tmp1)
-tmp1$source<-'PCD'
+tmp1$source<-'pCD'
 
 tmp2<-data.frame(degree=igraph::degree(gnet2),center=betweenness(gnet2))
 tmp2$gene<-row.names(tmp2)
@@ -516,20 +667,192 @@ ggplot(ddf,aes(degree,center))+
 
 ## Fig. 4
 ```
-dnd1<-fastgreedy.community(gnet1)
-dnd2<-fastgreedy.community(gnet2)
+gdf<-read.table('./data/ibd.gene')
+gene<-read.table('./data/discovery.gene.txt')$V1
 
-dnd1 <- as.dendrogram(dnd1)
-dnd2 <- as.dendrogram(dnd2)
+df<-read.table(gzfile('./data/HP.Monocytes.txt.gz'))
+names(df)<-gene
+df<-df[,gene %in% gdf$V1]
+df<-df[,colSums(df)>0]
+df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
+df<-log(df+1)
+exp<-colSums(df)/nrow(df)
+cor.matrix<- cor(df,use = "pairwise.complete.obs")
+mbModel <- huge(as.matrix(df), method = "mb")
+mbOptRIC = huge.select(mbModel,criterion="stars")
+mbOptRICGraph = mbOptRIC$refit
+adj<-as.matrix(mbOptRICGraph)
+colnames(adj)<-names(df)
+rownames(adj)<-names(df)
+ss<-rowSums(adj)>1
+gg<-names(df)[ss]
+adj<-adj[ss,ss]
+net<-igraph::graph_from_adjacency_matrix(adj,mode="undirected")
+Net_pHC<-net
 
-dnd1 <- ladder(dnd1)
-dnd2 <- ladder(dnd2)
+df<-read.table(gzfile('./data/pCD.Monocytes.txt.gz'))
+names(df)<-gene
+df<-df[,gene %in% gdf$V1]
+df<-df[,colSums(df)>0]
+df<-df[,colSums(df==0)/(nrow(df)-1)<0.9]
+df<-log(df+1)
+exp<-colSums(df)/nrow(df)
+cor.matrix<- cor(df,use = "pairwise.complete.obs")
+mbModel <- huge(as.matrix(df), method = "mb")
+mbOptRIC = huge.select(mbModel,criterion="stars")
+mbOptRICGraph = mbOptRIC$refit
+adj<-as.matrix(mbOptRICGraph)
+colnames(adj)<-names(df)
+rownames(adj)<-names(df)
+ss<-names(df) %in% gg
+adj<-adj[ss,ss]
+net<-igraph::graph_from_adjacency_matrix(adj,mode="undirected")
+Net_pCD<-net
 
-dndlist <- dendextend::dendlist(dnd2, dnd1)
-dendextend::tanglegram(dndlist, fast = TRUE, margin_inner = 5)
+kc1<-fastgreedy.community(Net_pCD)
+kc2<-fastgreedy.community(Net_pHC)
+dnd1 <- as.dendrogram(kc1)
+dnd2 <- as.dendrogram(kc2)
+dnd1 <- phylogram::ladder(dnd1)
+dnd2 <- phylogram::ladder(dnd2)
 
-tanglegram(rank_branches(dnd2), rank_branches(dnd1), edge.lwd = 2,
-           margin_inner = 5, type = "t", center = TRUE,
-           axes=F)
+treeplot<-tanglegram(rank_branches(dnd2), rank_branches(dnd1), edge.lwd = 2,
+                  margin_inner = 5, type = "t", center = TRUE,
+                  axes=F,
+                  k_branches = 7)
+
+plot(treea,margin_inner = 5)
+```
+
+## Fig. S1
+```
+source('./bin/bootstrap_enrichment_test.r')
+source('./bin/cell_list_dist.r')
+source('./bin/generate_controlled_bootstrap_geneset.r')
+source('./bin/get_summed_proportions.r')
+load('./data/CellTypeData_aCD.rda')
+
+gdf<-read.table('./data/ibd.gene')
+x<-unique(gdf$V1)
+bg<-rownames(ctd[[1]]$specificity)
+hits<-x[x %in% bg]
+set.seed(2023)
+rdf<-bootstrap_enrichment_test(sct_data=ctd,
+                               hits=hits,
+                               bg=bg,
+                               reps=10000,
+                               annotLevel=1)
+rdf$results$celltype<-row.names(rdf$results)
+rdf$results$FDR<-p.adjust(rdf$results$p,method='fdr')
+write.table(rdf$results,file='replication.enrichment.txt',sep='\t',quote=F,row.names=F,col.names=T)
+
+df<-read.table('replication.enrichment.txt',sep='\t',head=T)
+df$sign<-ifelse(df$p<0.001,'*',NA)
+
+ggplot(df,aes(celltype,-log10(p)))+
+  geom_histogram(stat='identity')+
+  geom_text(aes(label=sign),hjust=0,vjust=0.75,size=5)+
+  coord_flip()+
+  xlab('')+
+  scale_y_continuous(expression(paste(-log[10],"P-value")),
+                     limits = c(0,5),expand=c(0,0))+
+  theme_classic()+
+  theme(legend.position = c(0.85,0.9),
+        plot.title = element_text(size = 15,colour="black"),
+        axis.text = element_text(size=12,colour="black"),
+        #axis.text.x = element_text(angle=-45,hjust=0),
+        axis.title = element_text(size=15,colour="black"),
+        strip.text = element_text(size=12,colour="black"))
+```
+
+
+
+## Fig S2
+```
+cl<-function(g){
+  A<-as.matrix(get.adjacency(g))
+  S<-A+t(A)
+  deg<-igraph::degree(g,mode=c("total"))
+  num<-diag(S %*% S %*% S)
+  denom<-diag(A %*% A)
+  denom<-2*(deg*(deg-1)-2*denom)
+  cc<-mean(num[denom!=0]/denom[denom!=0])
+  return(cc)
+}
+
+tmp1<-data.frame(V=length(V(net1)),E=length(E(net1)),D=graph.density(net1),T=transitivity(net1),C=cl(net1),S='CDI')
+tmp2<-data.frame(V=length(V(net2)),E=length(E(net2)),D=graph.density(net2),T=transitivity(net2),C=cl(net2),S='CDN')
+tmp3<-data.frame(V=length(V(net3)),E=length(E(net3)),D=graph.density(net3),T=transitivity(net3),C=cl(net3),S='HA')
+tdf<-rbind(tmp1,tmp2,tmp3)
+tdf<-melt(tdf[,-4],id='S')
+tdf$S<-factor(tdf$S,levels=c('CDI','CDN','HA'),
+              labels=c("CD\ninflammation","CD non\ninflammation","Healthy\nadult"),
+              order=T)
+tdf$variable<-factor(tdf$variable,
+                     levels=c('V','E','D','C'),
+                     labels=c('Nodes','Edges','Density','Cluster'))
+
+figs2A<-ggplot()+
+  geom_histogram(data=tdf,aes(S,value,fill=variable),stat='identity',colour='black')+
+  scale_fill_brewer(palette = "Set2")+
+  xlab('')+ylab('# summary')+ggtitle('A')+
+  facet_wrap(~variable,scale='free',nrow=2)+
+  #coord_flip()+
+  theme_classic()+
+  theme(legend.position = 'none',
+        plot.title = element_text(size = 15),
+        axis.text = element_text(size=12,colour="black"),
+        axis.text.x = element_text(angle=-45,hjust=0,size=8),
+        axis.title = element_text(size=15,colour="black"),
+        strip.text = element_text(size=12,colour="black"))
+
+
+
+tmp1<-data.frame(degree=igraph::degree(net1),center=betweenness(net1))
+tmp1$gene<-row.names(tmp1)
+tmp1$source<-'CDI'
+
+tmp2<-data.frame(degree=igraph::degree(net2),center=betweenness(net2))
+tmp2$gene<-row.names(tmp2)
+tmp2$source<-'CDN'
+
+tmp3<-data.frame(degree=igraph::degree(net3),center=betweenness(net3))
+tmp3$gene<-row.names(tmp3)
+tmp3$source<-'HA'
+
+ddf<-rbind(tmp1,tmp2,tmp3)
+ddf$source<-factor(ddf$source,levels=c('CDI','CDN','HA'),
+                   labels=c('CD inflammation','CD non-inflammation','Healthy adult'),
+                   order=T)
+figs2B<-
+  ggplot()+
+  geom_histogram(data=ddf,aes(degree,fill=source),binwidth = 1,colour='black')+
+  scale_fill_brewer(palette = "Set2")+
+  xlab('Node degree')+ylab('Counts')+ggtitle('B')+
+  facet_wrap(~source,scale='free_y',nrow=3)+
+  #coord_flip()+
+  theme_classic()+
+  theme(legend.position = 'none',
+        plot.title = element_text(size = 15),
+        axis.text = element_text(size=12,colour="black"),
+        axis.title = element_text(size=15,colour="black"),
+        strip.text = element_text(size=12,colour="black"))
+
+
+ldf<-ddf[ddf$center>50 & ddf$degree>4,]
+figs2C<-ggplot(ddf,aes(degree,center))+
+  geom_point()+
+  xlab('Degree')+ylab('Central score')+ggtitle('C')+
+  facet_wrap(~source,scale='free',nrow=1)+
+  theme_classic()+
+  theme(legend.position = 'none',
+        plot.title = element_text(size = 15),
+        axis.text = element_text(size=12,colour="black"),
+        axis.title = element_text(size=15,colour="black"),
+        strip.text = element_text(size=12,colour="black"))+
+  geom_text_repel(data=ldf,aes(label=gene),size=3,box.padding = 0.1,max.overlaps=20)
+
+figs2AB<-ggarrange(figsA,figsB,nrow=1,widths = c(1,1))
+ggarrange(figs2AB,figs2C,ncol=1,heights  = c(1,1))
 ```
 
