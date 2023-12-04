@@ -220,7 +220,7 @@ source('./bin/bootstrap_enrichment_test.r')
 source('./bin/cell_list_dist.r')
 source('./bin/generate_controlled_bootstrap_geneset.r')
 source('./bin/get_summed_proportions.r')
-load('./data/CellTypeData_pCD.rda')
+load('./data/ctd_pCD.rda')
 
 gdf<-read.table('./data/ibd.gene')
 x<-unique(gdf$V1)
@@ -730,13 +730,13 @@ source('./bin/bootstrap_enrichment_test.r')
 source('./bin/cell_list_dist.r')
 source('./bin/generate_controlled_bootstrap_geneset.r')
 source('./bin/get_summed_proportions.r')
-load('./data/CellTypeData_aCD.rda')
 
-gdf<-read.table('./data/ibd.gene')
+load('D:/IBD/ctd_aCD.rda')
+gdf<-read.table('ibd.gene')
 x<-unique(gdf$V1)
-bg<-rownames(ctd[[1]]$specificity)
+bg<-row.names(ctd[[1]]$specificity)
 hits<-x[x %in% bg]
-set.seed(2023)
+set.seed(1)
 rdf<-bootstrap_enrichment_test(sct_data=ctd,
                                hits=hits,
                                bg=bg,
@@ -744,12 +744,14 @@ rdf<-bootstrap_enrichment_test(sct_data=ctd,
                                annotLevel=1)
 rdf$results$celltype<-row.names(rdf$results)
 rdf$results$FDR<-p.adjust(rdf$results$p,method='fdr')
-write.table(rdf$results,file='replication.enrichment.txt',sep='\t',quote=F,row.names=F,col.names=T)
+write.table(rdf$results,file='enrichment.txt',sep='\t',quote=F,row.names=F,col.names=T)
 
-df<-read.table('replication.enrichment.txt',sep='\t',head=T)
-df$sign<-ifelse(df$p<0.001,'*',NA)
+df<-read.table('enrichment.txt',sep='\t',head=T)
+df<-df[order(df$p,decreasing = T),]
+df$CellType<-factor(df$CellType,levels=df$CellType,order=T)
+df$sign<-ifelse(df$p<0.005,'*',NA)
 
-ggplot(df,aes(celltype,-log10(p)))+
+ggplot(df,aes(CellType,-log10(p)))+
   geom_histogram(stat='identity')+
   geom_text(aes(label=sign),hjust=0,vjust=0.75,size=5)+
   coord_flip()+
@@ -760,7 +762,6 @@ ggplot(df,aes(celltype,-log10(p)))+
   theme(legend.position = c(0.85,0.9),
         plot.title = element_text(size = 15,colour="black"),
         axis.text = element_text(size=12,colour="black"),
-        #axis.text.x = element_text(angle=-45,hjust=0),
         axis.title = element_text(size=15,colour="black"),
         strip.text = element_text(size=12,colour="black"))
 ```
