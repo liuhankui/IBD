@@ -726,7 +726,7 @@ treeplot<-tanglegram(rank_branches(dnd2), rank_branches(dnd1), edge.lwd = 2,
                   axes=F,
                   k_branches = 7)
 
-plot(treea,margin_inner = 5)
+plot(treeplot,margin_inner = 5)
 ```
 
 ## Fig. S1
